@@ -31,7 +31,7 @@ class editor_state:
             curr_line_len = len(self.rows[self.cy])
             self.cy += 1
             next_line_len = len(self.rows[self.cy])
-            if next_line_len < curr_line_len: 
+            if next_line_len < curr_line_len and next_line_len - 1 < self.cx: 
                 self.cx = next_line_len - 1
             self.G.change_line (self.cy - 1, self.rows[self.cy - 1][:-1], [])
             self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
@@ -41,7 +41,7 @@ class editor_state:
             curr_line_len = len(self.rows[self.cy])
             self.cy -= 1
             next_line_len = len(self.rows[self.cy])
-            if next_line_len < curr_line_len: 
+            if next_line_len < curr_line_len and next_line_len - 1 < self.cx: 
                 self.cx = next_line_len - 1
             self.G.change_line (self.cy + 1, self.rows[self.cy + 1][:-1], [])
             self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])

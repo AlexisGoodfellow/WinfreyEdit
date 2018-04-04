@@ -16,14 +16,29 @@ class editor_state:
             self.rows[i] += '\n'
 
     def move_cursor(self, direction):
-        if direction == 'left':
+        """ Move the cursor sanely, handling all bounds checking. """
+        # Move left unless at beginning of line
+        if direction == 'left' and self.cx != 0:
             self.cx -= 1
-        elif direction == 'right':
+        # Move right unless at end of line
+        elif direction == 'right' and self.rows[self.cy][self.cx] != '\n':
             self.cx += 1
-        elif direction == 'down':
+        # Move down, accounting for line length differences
+        # and never moving beyond the last line of the file
+        elif direction == 'down' and self.cy != len(self.rows) - 1:
+            curr_line_len = len(self.rows[self.cy])
             self.cy += 1
-        else:
+            next_line_len = len(self.rows[self.cy])
+            if next_line_len < curr_line_len: 
+                self.cx = next_line_len - 1
+        # Move up, accounting for line length differences
+        # and never moving before the first line of the file
+        elif direction == 'up' and self.cy != 0:
+            curr_line_len = len(self.rows[self.cy])
             self.cy -= 1
+            next_line_len = len(self.rows[self.cy])
+            if next_line_len < curr_line_len: 
+                self.cx = next_line_len - 1
 
         self.G.change_line (self.cy, self.rows[self.cy], [self.cx])
 

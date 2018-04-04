@@ -40,7 +40,7 @@ class editor_state:
             if next_line_len < curr_line_len: 
                 self.cx = next_line_len - 1
 
-        self.G.change_line (self.cy, self.rows[self.cy], [self.cx])
+        self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
 
     def insert_char(self, c):
         row = self.cy
@@ -53,7 +53,7 @@ class editor_state:
         else:
             self.rows[row] = r[:col] + c + r[col:]
 
-        self.G.change_line(row, self.rows[row], [col])
+        self.G.change_line(row, self.rows[row][:-1], [col])
         self.move_cursor('right')
 
     def remove_char(self):
@@ -66,6 +66,8 @@ class editor_state:
             self.rows.pop(row + 1)
         else:
             self.rows[row] = r[:col] + r[col + 1:]
+
+        self.G.change_line(row, self.rows[row][:-1], [col])
 
     def write(self, filename=''):
         if filename == '':

@@ -59,8 +59,12 @@ class editor_state:
                 self.rows.pop( self.cy + 1 )
                 self.G.delete_line( self.cy + 1 )
                 self.G.change_line( self.cy, self.rows[self.cy][:-1], [self.cx] )
-        elif direction == 'delete' and self.rows[self.cy][self.cx] != '\n':
-            self.remove_char()
+        elif direction == 'delete':# and (self.cy < self.numrows or self.rows[self.cy][self.cx] != '\n'):
+            if self.cy == self.numrows - 2:
+                if self.rows[self.cy][self.cx] != '\n':
+                    self.remove_char()
+            else:
+                self.remove_char()
         elif direction == 'enter':
             self.insert_char('\n')
 
@@ -89,10 +93,11 @@ class editor_state:
         if r[col] == '\n':
             self.rows[row] = r[:col] + self.rows[row + 1]
             self.rows.pop(row + 1)
+            self.G.delete_line(row + 1)
+            self.G.change_line(row, self.rows[row][:-1], [col])
         else:
             self.rows[row] = r[:col] + r[col + 1:]
-
-        self.G.change_line(row, self.rows[row][:-1], [col])
+            self.G.change_line(row, self.rows[row][:-1], [col])
 
     def write(self, filename=''):
         if filename == '':

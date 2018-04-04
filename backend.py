@@ -45,6 +45,14 @@ class editor_state:
                 self.cx = next_line_len - 1
             self.G.change_line (self.cy + 1, self.rows[self.cy + 1][:-1], [])
             self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
+        elif direction == 'backspace' and self.cx != 0:
+            self.move_cursor('left')
+            self.remove_char()
+        elif direction == 'delete' and self.rows[self.cy][self.cx] != '\n':
+            self.remove_char()
+        elif direction == 'enter':
+            self.insert_char('\n')
+            self.move_cursor('down')
 
     def insert_char(self, c):
         row = self.cy

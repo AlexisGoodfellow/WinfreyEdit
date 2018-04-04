@@ -27,7 +27,7 @@ class editor_state:
             self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
         # Move down, accounting for line length differences
         # and never moving beyond the last line of the file
-        elif direction == 'down' and self.cy < len(self.rows) - 1:
+        elif direction == 'down' and self.cy < len(self.rows) - 2:
             curr_line_len = len(self.rows[self.cy])
             self.cy += 1
             next_line_len = len(self.rows[self.cy])
@@ -45,6 +45,14 @@ class editor_state:
                 self.cx = next_line_len - 1
             self.G.change_line (self.cy + 1, self.rows[self.cy + 1][:-1], [])
             self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
+        elif direction == 'backspace' and self.cx != 0:
+            self.move_cursor('left')
+            self.remove_char()
+        elif direction == 'delete' and self.rows[self.cy][self.cx] != '\n':
+            self.remove_char()
+        elif direction == 'enter':
+            self.insert_char('\n')
+            self.move_cursor('down')
 
     def insert_char(self, c):
         row = self.cy

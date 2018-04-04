@@ -15,16 +15,18 @@ class editor_state:
         for i in range(self.numrows - 1):
             self.rows[i] += '\n'
 
+    def move_cursor_in_row( self, x ):
+        self.cx = x;
+        self.G.change_line( self.cy, self.rows[self.cy][:-1], [self.cx])
+
     def move_cursor(self, direction):
         """ Move the cursor sanely, handling all bounds checking. """
         # Move left unless at beginning of line
         if direction == 'left' and self.cx != 0:
-            self.cx -= 1
-            self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
+            self.move_cursor_in_row( self.cx - 1 );
         # Move right unless at end of line
         elif direction == 'right' and self.rows[self.cy][self.cx] != '\n':
-            self.cx += 1
-            self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
+            self.move_cursor_in_row( self.cx + 1 );
         # Move down, accounting for line length differences
         # and never moving beyond the last line of the file
         elif direction == 'down' and self.cy < len(self.rows) - 2:
@@ -45,9 +47,18 @@ class editor_state:
                 self.cx = next_line_len - 1
             self.G.change_line (self.cy + 1, self.rows[self.cy + 1][:-1], [])
             self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
-        elif direction == 'backspace' and self.cx != 0:
-            self.move_cursor('left')
-            self.remove_char()
+        elif direction == 'backspace':
+            if self.cx > 0:
+                self.move_cursor('left')
+                self.remove_char()
+            else:
+                self.move_cursor('up')
+                self.move_cursor_in_row(len(self.rows[self.cy]) - 1)
+                self.rows[self.cy] = self.rows[self.cy][:-1]
+                self.rows[self.cy] += self.rows[self.cy+1]
+                self.rows.pop( self.cy + 1 )
+                self.G.delete_line( self.cy + 1 )
+                self.G.change_line( self.cy, self.rows[self.cy][:-1], [self.cx] )
         elif direction == 'delete' and self.rows[self.cy][self.cx] != '\n':
             self.remove_char()
         elif direction == 'enter':
@@ -64,8 +75,7 @@ class editor_state:
             self.G.add_line(row, r[col:], [])
             self.G.change_line(row, r[:col], [])
             self.move_cursor('down')
-            while self.cx > 0:
-                self.move_cursor('left')
+            self.move_cursor_in_row( 0 );
         else:
             self.rows[row] = r[:col] + c + r[col:]
             self.G.change_line(row, self.rows[row][:-1], [col])

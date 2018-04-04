@@ -1,3 +1,5 @@
+import gui
+
 class editor_state:
     def __init__(self, filename=''):
         self.fname = filename
@@ -9,6 +11,7 @@ class editor_state:
         except FileNotFoundError:
             self.rows = []
         self.numrows = len(self.rows)
+        self.G = gui.MultiCursorGui(self.rows, self.insert_char, self.move_cursor)
         for i in range(self.numrows - 1):
             self.rows[i] += '\n'
 
@@ -22,6 +25,8 @@ class editor_state:
         else:
             self.cy -= 1
 
+        self.G.change_line (self.cy, self.rows[self.cy], [self.cx])
+
     def insert_char(self, c):
         row = self.cy
         col = self.cx
@@ -32,6 +37,9 @@ class editor_state:
             self.rows.insert(row + 1, r[col:])
         else:
             self.rows[row] = r[:col] + c + r[col:]
+
+        self.G.change_line(row, self.rows[row], [col])
+        self.move_cursor('right')
 
     def remove_char(self):
         row = self.cy

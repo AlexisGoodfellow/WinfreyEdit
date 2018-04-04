@@ -52,7 +52,6 @@ class editor_state:
             self.remove_char()
         elif direction == 'enter':
             self.insert_char('\n')
-            self.move_cursor('down')
 
     def insert_char(self, c):
         row = self.cy
@@ -62,11 +61,15 @@ class editor_state:
         if c == '\n':
             self.rows[row] = r[:col] + c
             self.rows.insert(row + 1, r[col:])
+            self.G.add_line(row, r[col:], [])
+            self.G.change_line(row, r[:col], [])
+            self.move_cursor('down')
+            while self.cx > 0:
+                self.move_cursor('left')
         else:
             self.rows[row] = r[:col] + c + r[col:]
-
-        self.G.change_line(row, self.rows[row][:-1], [col])
-        self.move_cursor('right')
+            self.G.change_line(row, self.rows[row][:-1], [col])
+            self.move_cursor('right')
 
     def remove_char(self):
         row = self.cy

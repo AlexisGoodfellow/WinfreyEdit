@@ -59,7 +59,7 @@ class editor_state:
                 self.rows.pop( self.cy + 1 )
                 self.G.delete_line( self.cy + 1 )
                 self.G.change_line( self.cy, self.rows[self.cy][:-1], [self.cx] )
-        elif direction == 'delete':# and (self.cy < self.numrows or self.rows[self.cy][self.cx] != '\n'):
+        elif direction == 'delete':
             if self.cy == self.numrows - 2:
                 if self.rows[self.cy][self.cx] != '\n':
                     self.remove_char()

@@ -27,7 +27,7 @@ class editor_state:
             self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
         # Move down, accounting for line length differences
         # and never moving beyond the last line of the file
-        elif direction == 'down' and self.cy != len(self.rows) - 1:
+        elif direction == 'down' and self.cy < len(self.rows) - 1:
             curr_line_len = len(self.rows[self.cy])
             self.cy += 1
             next_line_len = len(self.rows[self.cy])
@@ -37,7 +37,7 @@ class editor_state:
             self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
         # Move up, accounting for line length differences
         # and never moving before the first line of the file
-        elif direction == 'up' and self.cy != 0:
+        elif direction == 'up' and self.cy > 0:
             curr_line_len = len(self.rows[self.cy])
             self.cy -= 1
             next_line_len = len(self.rows[self.cy])

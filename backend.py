@@ -20,9 +20,11 @@ class editor_state:
         # Move left unless at beginning of line
         if direction == 'left' and self.cx != 0:
             self.cx -= 1
+            self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
         # Move right unless at end of line
         elif direction == 'right' and self.rows[self.cy][self.cx] != '\n':
             self.cx += 1
+            self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
         # Move down, accounting for line length differences
         # and never moving beyond the last line of the file
         elif direction == 'down' and self.cy != len(self.rows) - 1:
@@ -31,6 +33,8 @@ class editor_state:
             next_line_len = len(self.rows[self.cy])
             if next_line_len < curr_line_len: 
                 self.cx = next_line_len - 1
+            self.G.change_line (self.cy - 1, self.rows[self.cy - 1][:-1], [])
+            self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
         # Move up, accounting for line length differences
         # and never moving before the first line of the file
         elif direction == 'up' and self.cy != 0:
@@ -39,8 +43,8 @@ class editor_state:
             next_line_len = len(self.rows[self.cy])
             if next_line_len < curr_line_len: 
                 self.cx = next_line_len - 1
-
-        self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
+            self.G.change_line (self.cy + 1, self.rows[self.cy + 1][:-1], [])
+            self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
 
     def insert_char(self, c):
         row = self.cy

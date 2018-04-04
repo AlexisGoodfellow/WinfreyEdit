@@ -4,3 +4,4 @@ network/logs/
 network/__pycache__/
 network/base/__pycache__/
 network/conf/__pycache__/
+*.pyc

@@ -47,11 +47,12 @@ class editor_state:
                 self.cx = next_line_len - 1
             self.G.change_line (self.cy + 1, self.rows[self.cy + 1][:-1], [])
             self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
+        # delete character in front of cursor
         elif direction == 'backspace':
             if self.cx > 0:
                 self.move_cursor('left')
                 self.remove_char()
-            else:
+            elif self.cy != 0:
                 self.move_cursor('up')
                 self.move_cursor_in_row(len(self.rows[self.cy]) - 1)
                 self.rows[self.cy] = self.rows[self.cy][:-1]
@@ -59,12 +60,14 @@ class editor_state:
                 self.rows.pop( self.cy + 1 )
                 self.G.delete_line( self.cy + 1 )
                 self.G.change_line( self.cy, self.rows[self.cy][:-1], [self.cx] )
+        # delete character under cursor
         elif direction == 'delete':
             if self.cy == self.numrows - 2:
                 if self.rows[self.cy][self.cx] != '\n':
                     self.remove_char()
             else:
                 self.remove_char()
+        # 
         elif direction == 'enter':
             self.insert_char('\n')
 

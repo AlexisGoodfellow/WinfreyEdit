@@ -1,6 +1,15 @@
+
+
+
+
 Item #: SCP-3240
 
 Object Class: Keter Neutralized Hiemal
+
+dsflksanm
+lksfjlsknaglna
+sdtklaslkfml
+
 
 Special Containment Procedures: At least twelve afflicted specimens from each species susceptible to SCP-3240 should be in Foundation custody. Captive specimens are to be contained in enclosures that mimic their natural biome, but do not allow for contact with unaffected members of their species. Populations of susceptible species should be monitored in locations of appearance and locations of predicted future appearance. The location of future occurrences is determined using the Lowell-Kost Algorithm described in Document 3240-Asterion.
 

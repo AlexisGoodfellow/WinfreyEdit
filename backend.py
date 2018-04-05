@@ -107,8 +107,13 @@ class editor_state:
             self.rows.insert(row + 1, r[col:])
             self.G.add_line(row, r[col:], [])
             self.update_line( row )
-            self.move_cursor(cid, 'down')
-            self.move_cursor_in_row(cid, 0)
+            for key in self.cursors:
+                if self.cursors[key]["cy"] > row:
+                    self.move_cursor( key, 'down' )
+                elif self.cursors[key]["cy"] == row and self.cursors[key]["cx"] >= col:
+                    tmp = self.cursors[key]["cx"]
+                    self.move_cursor( key, 'down' )
+                    self.move_cursor_in_row( key, tmp - col )
         else:
             self.rows[row] = r[:col] + c + r[col:]
             self.update_line( row )

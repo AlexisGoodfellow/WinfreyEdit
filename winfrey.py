@@ -51,8 +51,17 @@ class WinfreyServer( WinfreyEditor ):
 
         return {"status": "subscribed", "other": {"uuid": new_uuid, "file": self.rows, "cursors": self.cursors }}
 
+    def unsubscribe( self, uuid ):
+        print( "User " + uuid + " left." )
+        self.remove_cursor( uuid );
+        self.endpoint.broadcast( serialize( uuid, "remove_cursor", uuid ) )
+
     def create_cursor( self, cid ):
         super().create_cursor( cid )
+        return {"status": "ok", "other": ""}
+
+    def remove_cursor( self, cid ):
+        super().remove_cursor( cid )
         return {"status": "ok", "other": ""}
 
     def move_cursor( self, cid, direction ):
@@ -69,7 +78,7 @@ class WinfreyServer( WinfreyEditor ):
     def _handle( self, procedure ):
         rpc_funcs = {
                 "subscribe": self.subscribe,
-                "create_cursor": self.create_cursor,
+                "unsubscribe": self.unsubscribe,
                 "move_cursor": self.move_cursor,
                 "insert_char": self.insert_char
         }
@@ -80,7 +89,7 @@ class WinfreyServer( WinfreyEditor ):
 
         reply = function( *procedure["args"] )
         
-        if f != "subscribe":
+        if f == "move_cursor" or f == "insert_char":
            self.endpoint.broadcast( serialize( procedure["uuid"], procedure["name"], *procedure["args"] ) )
 
         return reply
@@ -93,7 +102,7 @@ class WinfreyServer( WinfreyEditor ):
 
 
 class WinfreyClient( WinfreyEditor ):
-    def __init__( self, remote_address, broadcast_address, terminal ):
+    def __init__( self, remote_address, broadcast_address ):
         self.logger = logging.getLogger("main")
         self.endpoint = clientpoint.Client( remote_address, broadcast_address, self.logger )
    
@@ -101,9 +110,7 @@ class WinfreyClient( WinfreyEditor ):
 
         self.subscribe()
         self.endpoint.startBackground( self._handle, preprocess=self._preprocess )
-
-        if terminal != "-t":
-            self.G.launch()
+        self.G.launch()
 
     def move_my_cursor( self, direction ):
         super().move_my_cursor( direction )
@@ -127,9 +134,18 @@ class WinfreyClient( WinfreyEditor ):
         else:
             return None
 
+    def unsubscribe( self ):
+        reply = self.endpoint.send( serialize( self.my_cursor, "unsubscribe", self.my_cursor ), preprocess=self._preprocess_indiv )
+        
+        self.endpoint.stop()
+
+    def interrupt( self ):
+        self.unsubscribe();
+
     def _handle( self, procedure ):
         rpc_funcs = {
                 "create_cursor": self.create_cursor,
+                "remove_cursor": self.remove_cursor,
                 "move_cursor": self.move_cursor,
                 "insert_char": self.insert_char,
         }
@@ -155,12 +171,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser( description='You get to edit! You get to edit! Everyone gets to edit!' )
     parser.add_argument('-c', metavar='SERVER_ADDR', help='Starts Winfrey as a client of the given address', action='store', dest='server_addr')
     parser.add_argument('-s', metavar='FILENAME', help='Starts Winfrey as server of the given file', action='store', dest='filename')
-    parser.add_argument('inter', help='Interactive port to server', action='store', dest='iport')
-    parser.add_argument('bcast', help='Broadcast port from server', action='store', dest='bport')
+    parser.add_argument('iport', help='Interactive port to server', action='store' )
+    parser.add_argument('bport', help='Broadcast port from server', action='store' )
 
     args = parser.parse_args()
 
-    if args.server_addr:
-        winfrey = WinfreyServer( "tcp://*:{}".format(args.iport), "tcp://*:{}".format( args.bport ), "garbage.txt" )
+    if args.filename:
+        winfrey = WinfreyServer( "tcp://*:{}".format(args.iport), "tcp://*:{}".format( args.bport ), args.filename )
     else:
-        winfrey = WinfreyClient( "tcp://%s:%s" % (sys.argv[2], sys.argv[3]), "tcp://%s:%s" % (sys.argv[2], sys.argv[4]), sys.argv[5])
+        winfrey = WinfreyClient( "tcp://%s:%s" % (args.server_addr, args.iport), "tcp://%s:%s" % (args.server_addr, args.bport))

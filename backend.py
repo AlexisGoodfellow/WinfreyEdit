@@ -13,9 +13,12 @@ class editor_state:
         except FileNotFoundError:
             self.rows = []
         self.numrows = len(self.rows)
-        self.G = gui.MultiCursorGui( self.rows, self.insert_my_char, self.move_my_cursor )
+        self.G = gui.MultiCursorGui( self.rows, self.insert_my_char, self.move_my_cursor, self.interrupt )
         for i in range(self.numrows - 1):
             self.rows[i] += '\n'
+
+    def interrupt( self ):
+        pass
 
     def update_line( self, line ):
         self.G.change_line( line, self.rows[line][:-1], [self.cursors[key]["cx"] for key in self.cursors if self.cursors[key]["cy"] == line])
@@ -23,6 +26,11 @@ class editor_state:
     def create_cursor( self, cid, x=0, y=0):
         self.cursors[cid] = {"cx": x, "cy": y};
         self.update_line( self.cursors[cid]["cy"] )
+
+    def remove_cursor( self, cid ):
+        line = self.cursors[cid]["cy"]
+        del self.cursors[cid]
+        self.update_line( line )
 
     def move_cursor_in_row( self, cid, x ):
         self.cursors[cid]["cx"] = x;

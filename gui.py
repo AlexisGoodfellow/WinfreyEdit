@@ -4,7 +4,7 @@ CURSOR = u"\u2588";
 
 class MultiCursorGui:
 
-    def __init__( self, lines=[], on_key=None, on_cursor=None ):
+    def __init__( self, lines=[], on_key=None, on_cursor=None, on_interrupt=None ):
         """ Create a new MultiCursorGui
         
         Args:
@@ -19,7 +19,7 @@ class MultiCursorGui:
         """
         self.started = False;
         self.walker = MultiCursorListWalker();
-        self.lines = MultiCursorListBox( self.walker, lines, on_key, on_cursor );
+        self.lines = MultiCursorListBox( self.walker, lines, on_key, on_cursor, on_interrupt );
         self.loop = urwid.MainLoop( self.lines );
 
     def launch( self ):
@@ -114,9 +114,10 @@ class MultiCursorListWalker( urwid.ListWalker ):
             return (self.lines[pos], pos);
 
 class MultiCursorListBox( urwid.ListBox ):
-    def __init__( self, walker, lines, on_key=None, on_cursor=None ):
+    def __init__( self, walker, lines, on_key=None, on_cursor=None, on_interrupt=None ):
         self.on_key = on_key;
         self.on_cursor = on_cursor;
+        self.on_interrupt = on_interrupt;
         super().__init__( walker );
         self.set_all_lines( lines );
 
@@ -148,6 +149,9 @@ class MultiCursorListBox( urwid.ListBox ):
         elif (key == 'enter'):
             self.on_cursor('enter');
             return None;
+        elif (key == 'esc'):
+            self.on_interrupt();
+            raise urwid.ExitMainLoop;
         elif len(key) == 1:
             self.on_key( key );
             return None;

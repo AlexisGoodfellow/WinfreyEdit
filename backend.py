@@ -11,11 +11,14 @@ class editor_state:
             with open(filename) as f:
                 self.rows = f.read().split('\n')
         except FileNotFoundError:
-            self.rows = []
+            self.rows = [""]
         self.numrows = len(self.rows)
-        self.G = gui.MultiCursorGui(self.rows, self.insert_my_char, self.move_my_cursor)
+        self.G = None
         for i in range(self.numrows - 1):
             self.rows[i] += '\n'
+
+    def init_gui( self ):
+        self.G = gui.MultiCursorGui( self.rows, self.insert_my_char, self.move_my_cursor )
 
     def update_line( self, line ):
         self.G.change_line( line, self.rows[line][:-1], [self.cursors[key]["cx"] for key in self.cursors if self.cursors[key]["cy"] == line])

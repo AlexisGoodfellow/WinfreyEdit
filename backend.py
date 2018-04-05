@@ -125,7 +125,7 @@ class editor_state:
             filename = self.fname
         try:
             if filename != '':
-                with open(filename) as f:
+                with open(filename, 'w') as f:
                     f.write(''.join(self.rows))
         except FileNotFoundError:
             pass

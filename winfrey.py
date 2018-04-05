@@ -1,7 +1,10 @@
 import sys
+import time
 import uuid
 import json
 import logging
+import threading
+import argparse
 from backend import editor_state as WinfreyEditor
 import client as clientpoint
 import server as serverpoint
@@ -29,7 +32,16 @@ class WinfreyServer( WinfreyEditor ):
         self.endpoint = serverpoint.Server( interact_address, broadcast_address, self.logger )
         super().__init__( filename )                 
 
+        save_thread = threading.Thread( target=self.save )
+
         self.endpoint.startBackground( preprocess=self._preprocess, handler=self._handle, postprocess=self._postprocess, pollTimeout = 2000 )
+        save_thread.start()
+
+    def save( self ):
+        while True:
+            time.sleep(30)
+            print( "Saving...." )
+            self.write( "temp.txt" )
 
     def subscribe( self ):
         new_uuid = uuid.uuid4().int
@@ -139,7 +151,16 @@ class WinfreyClient( WinfreyEditor ):
         return json.loads( message )
 
 if __name__ == "__main__":
-    if sys.argv[1] == "-s":
-        winfrey = WinfreyServer( "tcp://*:{}".format(sys.argv[2]), "tcp://*:{}".format( sys.argv[3] ), "garbage.txt" )
+
+    parser = argparse.ArgumentParser( description='You get to edit! You get to edit! Everyone gets to edit!' )
+    parser.add_argument('-c', metavar='SERVER_ADDR', help='Starts Winfrey as a client of the given address', action='store', dest='server_addr')
+    parser.add_argument('-s', metavar='FILENAME', help='Starts Winfrey as server of the given file', action='store', dest='filename')
+    parser.add_argument('inter', help='Interactive port to server', action='store', dest='iport')
+    parser.add_argument('bcast', help='Broadcast port from server', action='store', dest='bport')
+
+    args = parser.parse_args()
+
+    if args.server_addr:
+        winfrey = WinfreyServer( "tcp://*:{}".format(args.iport), "tcp://*:{}".format( args.bport ), "garbage.txt" )
     else:
         winfrey = WinfreyClient( "tcp://%s:%s" % (sys.argv[2], sys.argv[3]), "tcp://%s:%s" % (sys.argv[2], sys.argv[4]), sys.argv[5])

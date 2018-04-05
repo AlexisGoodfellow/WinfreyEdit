@@ -20,7 +20,6 @@ def deserialize( message ):
     nobject = json.loads( message )
     if type(nobject) != dict:
         raise DeserializationError("Received malformed data: {}".format(msg))
-    print( nobject )
     return nobject
 
 
@@ -35,7 +34,6 @@ class WinfreyServer( WinfreyEditor ):
     def subscribe( self ):
         new_uuid = uuid.uuid4().int
         print( "Created new user with UUID " + str(new_uuid) )
-        self.init_gui()
         self.create_cursor(str(new_uuid))
         self.endpoint.broadcast( serialize( new_uuid, "create_cursor", new_uuid ) )
 
@@ -87,12 +85,13 @@ class WinfreyClient( WinfreyEditor ):
         self.logger = logging.getLogger("main")
         self.endpoint = clientpoint.Client( remote_address, broadcast_address, self.logger )
    
-        self.terminal = terminal
-
         super().__init__()
 
         self.subscribe()
         self.endpoint.startBackground( self._handle, preprocess=self._preprocess )
+
+        if terminal != "-t":
+            self.G.launch()
 
     def move_my_cursor( self, direction ):
         super().move_my_cursor( direction )
@@ -106,15 +105,13 @@ class WinfreyClient( WinfreyEditor ):
         reply = self.endpoint.send( serialize( 0, "subscribe" ), preprocess=self._preprocess_indiv )
         if reply["status"] == "subscribed":
             self.my_cursor = str(reply["other"]["uuid"])
-            self.rows = [s.replace('\n', '') for s in reply["other"]["file"]]
+            self.rows = reply["other"]["file"]
             self.numrows = len( self.rows )
-            self.init_gui()
-            self.rows = [s + '\n' for s in self.rows]
+            for i in range( 0, len(self.rows) ):
+                self.G.add_line( i, self.rows[i][:-1], [] );
             for cid in reply["other"]["cursors"]:
                 cursor = reply["other"]["cursors"][cid]
                 self.create_cursor( cid, cursor["cx"], cursor["cy"] )
-            if self.terminal != "-t":
-                self.G.launch()
         else:
             return None
 

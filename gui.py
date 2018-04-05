@@ -17,11 +17,13 @@ class MultiCursorGui:
                     mvmt (str): String representing cursor movement. Valid values are:
                                 'left', 'right', 'up', 'down', 'backspace', 'delete', 'enter'
         """
+        self.started = False;
         self.walker = MultiCursorListWalker();
         self.lines = MultiCursorListBox( self.walker, lines, on_key, on_cursor );
         self.loop = urwid.MainLoop( self.lines );
 
     def launch( self ):
+        self.started = True;
         self.loop.run();
 
     def change_line( self, line, text, cursors ):
@@ -32,7 +34,8 @@ class MultiCursorGui:
                 text (str): Text to overwrite line with
                 cursors (int array): List of cursor positions within the line
         """
-        self.walker.change_line( line, text, cursors );
+        loop = self.loop if self.started else None
+        self.walker.change_line( line, text, cursors, loop );
 
     def add_line( self, prev_pos, text, cursors ):
         """ Adds a line beneath the given position.
@@ -97,9 +100,12 @@ class MultiCursorListWalker( urwid.ListWalker ):
         widget, ignore = self._get_widget_at( pos );
         self.lines.remove( widget );
 
-    def change_line( self, pos, text, cursors ):
+    def change_line( self, pos, text, cursors, loop ):
         widget, ignore = self._get_widget_at( pos );
         widget.set_line( text, cursors );
+        if loop:
+            loop.draw_screen()
+        self._modified()
 
     def _get_widget_at( self, pos ):
         if pos < 0 or pos >= len( self.lines ):

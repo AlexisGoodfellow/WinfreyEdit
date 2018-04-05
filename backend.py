@@ -11,14 +11,11 @@ class editor_state:
             with open(filename) as f:
                 self.rows = f.read().split('\n')
         except FileNotFoundError:
-            self.rows = [""]
+            self.rows = []
         self.numrows = len(self.rows)
-        self.G = None
+        self.G = gui.MultiCursorGui( self.rows, self.insert_my_char, self.move_my_cursor )
         for i in range(self.numrows - 1):
             self.rows[i] += '\n'
-
-    def init_gui( self ):
-        self.G = gui.MultiCursorGui( self.rows, self.insert_my_char, self.move_my_cursor )
 
     def update_line( self, line ):
         self.G.change_line( line, self.rows[line][:-1], [self.cursors[key]["cx"] for key in self.cursors if self.cursors[key]["cy"] == line])
@@ -101,12 +98,12 @@ class editor_state:
             self.rows[row] = r[:col] + c
             self.rows.insert(row + 1, r[col:])
             self.G.add_line(row, r[col:], [])
-            self.G.change_line(row, r[:col], [])
+            self.update_line( row )
             self.move_cursor(cid, 'down')
             self.move_cursor_in_row(cid, 0)
         else:
             self.rows[row] = r[:col] + c + r[col:]
-            self.G.change_line(row, self.rows[row][:-1], [col])
+            self.update_line( row )
             self.move_cursor(cid, 'right')
 
     def remove_char(self, cid):
@@ -118,10 +115,10 @@ class editor_state:
             self.rows[row] = r[:col] + self.rows[row + 1]
             self.rows.pop(row + 1)
             self.G.delete_line(row + 1)
-            self.G.change_line(row, self.rows[row][:-1], [col])
+            self.update_line( row )
         else:
             self.rows[row] = r[:col] + r[col + 1:]
-            self.G.change_line(row, self.rows[row][:-1], [col])
+            self.update_line( row )
 
     def write(self, filename=''):
         if filename == '':

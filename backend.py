@@ -3,77 +3,95 @@ import gui
 class editor_state:
     def __init__(self, filename=''):
         self.fname = filename
-        self.cx = 0
-        self.cy = 0
+
+        self.cursors = {}
+        self.my_cursor = 0;
+
         try:
             with open(filename) as f:
                 self.rows = f.read().split('\n')
         except FileNotFoundError:
             self.rows = []
         self.numrows = len(self.rows)
-        self.G = gui.MultiCursorGui(self.rows, self.insert_char, self.move_cursor)
+        self.G = gui.MultiCursorGui(self.rows, self.insert_my_char, self.move_my_cursor)
         for i in range(self.numrows - 1):
             self.rows[i] += '\n'
 
-    def move_cursor_in_row( self, x ):
-        self.cx = x;
-        self.G.change_line( self.cy, self.rows[self.cy][:-1], [self.cx])
+    def update_line( self, line ):
+        self.G.change_line( line, self.rows[line][:-1], [self.cursors[key]["cx"] for key in self.cursors if self.cursors[key]["cy"] == line])
 
-    def move_cursor(self, direction):
+    def create_cursor( self, cid ):
+        self.cursors[cid] = {"cx": 0, "cy": 0};
+        self.update_line( self.cursors[cid]["cy"] )
+
+    def move_cursor_in_row( self, cid, x ):
+        self.cursors[cid]["cx"] = x;
+        self.update_line( self.cursors[cid]["cy"] )
+
+    def insert_my_char( self, char ):
+        self.insert_char( self.my_cursor, char )
+
+    def move_my_cursor( self, direction ):
+        self.move_cursor( self.my_cursor, direction )
+
+    def move_cursor(self, cid, direction):
         """ Move the cursor sanely, handling all bounds checking. """
+
+        cursor = self.cursors[cid];
+
         # Move left unless at beginning of line
-        if direction == 'left' and self.cx != 0:
-            self.move_cursor_in_row( self.cx - 1 );
+        if direction == 'left' and cursor["cx"] != 0:
+            self.move_cursor_in_row( cid, cursor["cx"] - 1 );
         # Move right unless at end of line
-        elif direction == 'right' and self.rows[self.cy][self.cx] != '\n':
-            self.move_cursor_in_row( self.cx + 1 );
+        elif direction == 'right' and self.rows[cursor["cy"]][cursor["cx"]] != '\n':
+            self.move_cursor_in_row( cid, cursor["cx"] + 1 );
         # Move down, accounting for line length differences
         # and never moving beyond the last line of the file
-        elif direction == 'down' and self.cy < len(self.rows) - 2:
-            curr_line_len = len(self.rows[self.cy])
-            self.cy += 1
-            next_line_len = len(self.rows[self.cy])
-            if next_line_len < curr_line_len and next_line_len - 1 < self.cx: 
-                self.cx = next_line_len - 1
-            self.G.change_line (self.cy - 1, self.rows[self.cy - 1][:-1], [])
-            self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
+        elif direction == 'down' and cursor["cy"] < len(self.rows) - 2:
+            curr_line_len = len(self.rows[cursor["cy"]])
+            cursor["cy"] += 1
+            next_line_len = len(self.rows[cursor["cy"]])
+            if next_line_len < curr_line_len and next_line_len - 1 < cursor["cx"]: 
+                cursor["cx"] = next_line_len - 1
+            self.update_line( cursor["cy"] - 1 )
+            self.update_line( cursor["cy"] )
         # Move up, accounting for line length differences
         # and never moving before the first line of the file
-        elif direction == 'up' and self.cy > 0:
-            curr_line_len = len(self.rows[self.cy])
-            self.cy -= 1
-            next_line_len = len(self.rows[self.cy])
-            if next_line_len < curr_line_len and next_line_len - 1 < self.cx: 
-                self.cx = next_line_len - 1
-            self.G.change_line (self.cy + 1, self.rows[self.cy + 1][:-1], [])
-            self.G.change_line (self.cy, self.rows[self.cy][:-1], [self.cx])
+        elif direction == 'up' and cursor["cy"] > 0:
+            curr_line_len = len(self.rows[cursor["cy"]])
+            cursor["cy"] -= 1
+            next_line_len = len(self.rows[cursor["cy"]])
+            if next_line_len < curr_line_len and next_line_len - 1 < cursor["cx"]: 
+                cursor["cx"] = next_line_len - 1
+            self.update_line( cursor["cy"] + 1 )
+            self.update_line( cursor["cy"] )
         # delete character in front of cursor
         elif direction == 'backspace':
-            if self.cx > 0:
-                self.move_cursor('left')
-                self.remove_char()
-            elif self.cy != 0:
-                self.move_cursor('up')
-                self.move_cursor_in_row(len(self.rows[self.cy]) - 1)
-                self.rows[self.cy] = self.rows[self.cy][:-1]
-                self.rows[self.cy] += self.rows[self.cy+1]
-                self.rows.pop( self.cy + 1 )
-                self.G.delete_line( self.cy + 1 )
-                self.G.change_line( self.cy, self.rows[self.cy][:-1], [self.cx] )
+            if cursor["cx"] > 0:
+                self.move_cursor( cid, 'left' )
+                self.remove_char( cid )
+            elif cursor["cy"] != 0:
+                self.move_cursor( cid, 'up' )
+                self.move_cursor_in_row( cid, len(self.rows[cursor["cy"]]) - 1)
+                self.rows[cursor["cy"]] = self.rows[cursor["cy"]][:-1]
+                self.rows[cursor["cy"]] += self.rows[cursor["cy"]+1]
+                self.rows.pop( cursor["cy"] + 1 )
+                self.G.delete_line( cursor["cy"] + 1 )
+                self.update_line( cursor["cy"] )
         # delete character under cursor
         elif direction == 'delete':
-            if self.cy == self.numrows - 2:
-                if self.rows[self.cy][self.cx] != '\n':
-                    self.remove_char()
+            if cursor["cy"] == self.numrows - 2:
+                if self.rows[cursor["cy"]][cursor["cx"]] != '\n':
+                    self.remove_char( cid )
             else:
-                self.remove_char()
+                self.remove_char( cid )
         # 
         elif direction == 'enter':
-            self.insert_char('\n')
+            self.insert_char( cid, '\n' )
 
-    def insert_char(self, c):
-        row = self.cy
-        col = self.cx
+    def insert_char(self, cid, c):
+        row = self.cursors[cid]["cy"]
+        col = self.cursors[cid]["cx"]
         r = self.rows[row]
 
         if c == '\n':
@@ -81,16 +99,16 @@ class editor_state:
             self.rows.insert(row + 1, r[col:])
             self.G.add_line(row, r[col:], [])
             self.G.change_line(row, r[:col], [])
-            self.move_cursor('down')
-            self.move_cursor_in_row( 0 );
+            self.move_cursor(cid, 'down')
+            self.move_cursor_in_row(cid, 0)
         else:
             self.rows[row] = r[:col] + c + r[col:]
             self.G.change_line(row, self.rows[row][:-1], [col])
-            self.move_cursor('right')
+            self.move_cursor(cid, 'right')
 
-    def remove_char(self):
-        row = self.cy
-        col = self.cx
+    def remove_char(self, cid):
+        row = self.cursors[cid]["cy"]
+        col = self.cursors[cid]["cx"]
         r = self.rows[row]
 
         if r[col] == '\n':

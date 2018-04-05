@@ -23,8 +23,8 @@ class editor_state:
     def update_line( self, line ):
         self.G.change_line( line, self.rows[line][:-1], [self.cursors[key]["cx"] for key in self.cursors if self.cursors[key]["cy"] == line])
 
-    def create_cursor( self, cid ):
-        self.cursors[cid] = {"cx": 0, "cy": 0};
+    def create_cursor( self, cid, x=0, y=0):
+        self.cursors[cid] = {"cx": x, "cy": y};
         self.update_line( self.cursors[cid]["cy"] )
 
     def move_cursor_in_row( self, cid, x ):
@@ -52,20 +52,20 @@ class editor_state:
         # and never moving beyond the last line of the file
         elif direction == 'down' and cursor["cy"] < len(self.rows) - 2:
             curr_line_len = len(self.rows[cursor["cy"]])
-            cursor["cy"] += 1
+            self.cursors[cid]["cy"] += 1
             next_line_len = len(self.rows[cursor["cy"]])
             if next_line_len < curr_line_len and next_line_len - 1 < cursor["cx"]: 
-                cursor["cx"] = next_line_len - 1
+                self.cursors[cid]["cx"] = next_line_len - 1
             self.update_line( cursor["cy"] - 1 )
             self.update_line( cursor["cy"] )
         # Move up, accounting for line length differences
         # and never moving before the first line of the file
         elif direction == 'up' and cursor["cy"] > 0:
             curr_line_len = len(self.rows[cursor["cy"]])
-            cursor["cy"] -= 1
+            self.cursors[cid]["cy"] -= 1
             next_line_len = len(self.rows[cursor["cy"]])
             if next_line_len < curr_line_len and next_line_len - 1 < cursor["cx"]: 
-                cursor["cx"] = next_line_len - 1
+                self.cursors[cid]["cx"] = next_line_len - 1
             self.update_line( cursor["cy"] + 1 )
             self.update_line( cursor["cy"] )
         # delete character in front of cursor

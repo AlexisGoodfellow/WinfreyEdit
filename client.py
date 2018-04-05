@@ -132,7 +132,7 @@ class Client(Loggable):
                     continue
 
                 try:
-                    handler(self, msg)
+                    handler(msg)
                 except GenericError as e:
                     self.error("Failure when handling {}".format(msg))
                     continue

@@ -39,7 +39,7 @@ class WinfreyServer( WinfreyEditor ):
         self.create_cursor(str(new_uuid))
         self.endpoint.broadcast( serialize( new_uuid, "create_cursor", new_uuid ) )
 
-        return {"status": "subscribed", "other": {"uuid": new_uuid, "file": self.rows, "cursors": self.cursors }}
+        return {"status": "subscribed", "other": {"uuid": new_uuid, "file": self.rows }}
 
     def create_cursor( self, cid ):
         super().create_cursor( cid )
@@ -71,7 +71,7 @@ class WinfreyServer( WinfreyEditor ):
         reply = function( *procedure["args"] )
         
         if f != "subscribe":
-           self.endpoint.broadcast( serialize( procedure["uuid"], procedure["name"], *procedure["args"] ) )
+           self.endpoint.broadcast( serialize( *procedure ) )
 
         return reply
 
@@ -83,10 +83,10 @@ class WinfreyServer( WinfreyEditor ):
 
 
 class WinfreyClient( WinfreyEditor ):
-    def __init__( self, remote_address, broadcast_address, terminal ):
+    def __init__( self, remote_address, broadcast_address, terminal=False):
         self.logger = logging.getLogger("main")
         self.endpoint = clientpoint.Client( remote_address, broadcast_address, self.logger )
-   
+    
         self.terminal = terminal
 
         super().__init__()
@@ -105,20 +105,19 @@ class WinfreyClient( WinfreyEditor ):
     def subscribe( self ):
         reply = self.endpoint.send( serialize( 0, "subscribe" ), preprocess=self._preprocess_indiv )
         if reply["status"] == "subscribed":
-            self.my_cursor = str(reply["other"]["uuid"])
+            self.my_cursor = reply["other"]["uuid"]
             self.rows = [s.replace('\n', '') for s in reply["other"]["file"]]
             self.numrows = len( self.rows )
             self.init_gui()
             self.rows = [s + '\n' for s in self.rows]
-            for cid in reply["other"]["cursors"]:
-                cursor = reply["other"]["cursors"][cid]
-                self.create_cursor( cid, cursor["cx"], cursor["cy"] )
-            if self.terminal != "-t":
+            self.create_cursor( self.my_cursor )
+            if not self.terminal:
                 self.G.launch()
         else:
             return None
 
     def _handle( self, procedure ):
+        print( procedure )
         rpc_funcs = {
                 "create_cursor": self.create_cursor,
                 "move_cursor": self.move_cursor,

@@ -32,9 +32,18 @@ class WinfreyServer( WinfreyEditor ):
         self.endpoint = serverpoint.Server( interact_address, broadcast_address, self.logger )
         super().__init__( filename )                 
 
+        self.rpc_funcs = {
+                "subscribe": self.subscribe,
+                "unsubscribe": self.unsubscribe,
+                "move_cursor": self.move_cursor,
+                "insert_char": self.insert_char
+        }
+
+        self.TEST_ARRAY = []
+
         save_thread = threading.Thread( target=self.save )
 
-        self.endpoint.startBackground( preprocess=self._preprocess, handler=self._handle, postprocess=self._postprocess, pollTimeout = 2000 )
+        self.endpoint.startBackground( preprocess=self._preprocess, handler=self._handle_TEST, postprocess=self._postprocess, pollTimeout = 2000 )
         save_thread.start()
 
     def save( self ):
@@ -75,6 +84,24 @@ class WinfreyServer( WinfreyEditor ):
     def no_such_function(*args):
         return {"status": "fail", "other": "No RPC matches this contract"}
 
+    def _handle_TEST( self, procedure ):
+        f = procedure["name"]
+
+        if f == "subscribe" or f == "unsubscribe":
+            function = self.rpc_funcs.get( f, self.no_such_function )
+
+            reply = function( *procedure["args"] )
+
+        else:
+            self.TEST_ARRAY.append( procedure )
+            reply = {"status": "ok", "other": ""}
+
+            if len(self.TEST_ARRAY) == 5:
+                _bundle_and_broadcast(self.TEST_ARRAY)
+                self.TEST_ARRAY = []
+
+        return reply
+
     def _handle( self, procedure ):
         rpc_funcs = {
                 "subscribe": self.subscribe,
@@ -94,6 +121,19 @@ class WinfreyServer( WinfreyEditor ):
 
         return reply
 
+    def _bundle_and_broadcast( self, procedures ):
+
+        messages = []
+
+        for procedure in procedures:
+            f = procedure["name"]
+
+            function = self.rpc_funcs.get( f, self.no_such_function )
+            function( *procedure["args"] )
+            messages.append(procedure)
+
+        self.endpoint.broadcast( json.dumps( messages ) )
+
     def _preprocess( self, message ):
         return deserialize( message )
 
@@ -107,6 +147,13 @@ class WinfreyClient( WinfreyEditor ):
         self.endpoint = clientpoint.Client( remote_address, broadcast_address, self.logger )
    
         super().__init__()
+
+        self.rpc_funcs = {
+                "create_cursor": self.create_cursor,
+                "remove_cursor": self.remove_cursor,
+                "move_cursor": self.move_cursor,
+                "insert_char": self.insert_char,
+        }
 
         self.subscribe()
         self.endpoint.startBackground( self._handle, preprocess=self._preprocess )
@@ -142,13 +189,7 @@ class WinfreyClient( WinfreyEditor ):
     def interrupt( self ):
         self.unsubscribe();
 
-    def _handle( self, procedure ):
-        rpc_funcs = {
-                "create_cursor": self.create_cursor,
-                "remove_cursor": self.remove_cursor,
-                "move_cursor": self.move_cursor,
-                "insert_char": self.insert_char,
-        }
+    def _handle_OLD( self, procedure ):
 
         if procedure["uuid"] == self.my_cursor:
             return
@@ -159,8 +200,21 @@ class WinfreyClient( WinfreyEditor ):
             function( *procedure["args"] )
 
         return
-    
+   
+    def _handle( self, procedures ):
+        for procedure in procedures:
+            if procedure["uuid"] == self.my_cursor:
+                return
+
+            f = procedure["name"]
+            function = self.rpc_funcs.get( f, None )
+            if function:
+                function( *procedure["args"] )
+
     def _preprocess( self, message ):
+        return json.loads( message )
+
+    def _preprocess_OLD( self, message ):
         return deserialize( message )
 
     def _preprocess_indiv( self, message ):

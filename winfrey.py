@@ -5,6 +5,7 @@ import json
 import logging
 import threading
 import argparse
+import ntplib
 from backend import editor_state as WinfreyEditor
 import client as clientpoint
 import server as serverpoint
@@ -41,6 +42,7 @@ class WinfreyServer( WinfreyEditor ):
 
         self.TEST_ARRAY = []
 
+
         save_thread = threading.Thread( target=self.save )
 
         self.endpoint.startBackground( preprocess=self._preprocess, handler=self._handle_TEST, postprocess=self._postprocess, pollTimeout = 2000 )
@@ -52,18 +54,19 @@ class WinfreyServer( WinfreyEditor ):
             print( "Saving...." )
             self.write( "temp.txt" )
 
+
     def subscribe( self ):
         new_uuid = uuid.uuid4().int
         print( "Created new user with UUID " + str(new_uuid) )
         self.create_cursor(str(new_uuid))
-        self.endpoint.broadcast( serialize( new_uuid, "create_cursor", new_uuid ) )
+        self.endpoint.broadcast( '[' + serialize( new_uuid, "create_cursor", new_uuid ) + ']')
 
         return {"status": "subscribed", "other": {"uuid": new_uuid, "file": self.rows, "cursors": self.cursors }}
 
     def unsubscribe( self, uuid ):
         print( "User " + uuid + " left." )
         self.remove_cursor( uuid );
-        self.endpoint.broadcast( serialize( uuid, "remove_cursor", uuid ) )
+        self.endpoint.broadcast( '[' + serialize( uuid, "remove_cursor", uuid ) + ']' )
 
     def create_cursor( self, cid ):
         super().create_cursor( cid )
@@ -97,7 +100,7 @@ class WinfreyServer( WinfreyEditor ):
             reply = {"status": "ok", "other": ""}
 
             if len(self.TEST_ARRAY) == 5:
-                _bundle_and_broadcast(self.TEST_ARRAY)
+                self._bundle_and_broadcast(self.TEST_ARRAY)
                 self.TEST_ARRAY = []
 
         return reply
@@ -155,17 +158,37 @@ class WinfreyClient( WinfreyEditor ):
                 "insert_char": self.insert_char,
         }
 
+        self.offset = 0
+        self.time_thread = threading.Thread( target=self.get_time )
+        self.timelock = threading.Lock()
+        self.ntpclient = ntplib.NTPClient()
+
+        self.time_thread.start()
         self.subscribe()
         self.endpoint.startBackground( self._handle, preprocess=self._preprocess )
         self.G.launch()
 
+    def get_time( self ):
+        while True:
+            time.sleep(30)
+            self.timelock.acquire()
+            response = self.ntpclient.request('0.pool.ntp.org', version=3)
+            self.offset = time.time() - response.tx_time
+            self.timelock.release()
+
     def move_my_cursor( self, direction ):
         super().move_my_cursor( direction )
-        reply = self.endpoint.send( serialize( self.my_cursor, "move_cursor", self.my_cursor, direction ))
+        self.timelock.acquire()
+        ltime = time.time() - self.offset
+        self.timelock.release()
+        reply = self.endpoint.send( {"uuid": str(self.my_cursor), "name": "move_cursor", "args": [str(self.my_cursor) str(direction)], "time": str(ltime)} )
 
     def insert_my_char( self, char ):
         super().insert_my_char( char )
-        reply = self.endpoint.send( serialize( self.my_cursor, "insert_char", self.my_cursor, char ))
+        self.timelock.acquire()
+        ltime = time.time() - self.offset
+        self.timelock.release()
+        reply = self.endpoint.send( {"uuid": str(self.my_cursor), "name": "insert_char", "args": [str(self.my_cursor) str(char)], "time": str(ltime)} )
 
     def subscribe( self ):
         reply = self.endpoint.send( serialize( 0, "subscribe" ), preprocess=self._preprocess_indiv )

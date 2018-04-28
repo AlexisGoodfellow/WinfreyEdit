@@ -76,6 +76,7 @@ class WinfreyServer( WinfreyEditor ):
 
     def move_cursor( self, cid, direction ):
         super().move_cursor( cid, direction )
+        self.endpoint.broadcast( serialize( cid, "echo", cid ) )
         return {"status": "ok", "other": ""}
 
     def insert_char( self, cid, char ):
@@ -83,13 +84,27 @@ class WinfreyServer( WinfreyEditor ):
         return {"status": "ok", "other": ""}
 
     def echo_response( self, message ):
+<<<<<<< HEAD
+        print("ECHO" + message)
+=======
         print("ECHO " + message)
+>>>>>>> message_bundling
         return {"status": "ok", "other": ""}
 
     def no_such_function(*args):
         return {"status": "fail", "other": "No RPC matches this contract"}
 
     def _handle( self, procedure ):
+<<<<<<< HEAD
+        rpc_funcs = {
+                "subscribe": self.subscribe,
+                "unsubscribe": self.unsubscribe,
+                "move_cursor": self.move_cursor,
+                "insert_char": self.insert_char,
+                "echo_response": self.echo_response
+        }
+=======
+>>>>>>> message_bundling
 
         f = procedure["name"]
 
@@ -173,6 +188,9 @@ class WinfreyClient( WinfreyEditor ):
         self.timelock.release()
         reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "insert_char", "args": [str(self.my_cursor), str(char)], "time": str(ltime)}) )
 
+    def echo( self, message ):
+        reply = self.endpoint.send( serialize(self.my_cursor, "echo_response", message))
+
     def subscribe( self ):
         reply = self.endpoint.send( serialize( 0, "subscribe" ), preprocess=self._preprocess_indiv )
         self.endpoint.startBackground( self._handleQueue, preprocess=self._preprocess )
@@ -189,7 +207,7 @@ class WinfreyClient( WinfreyEditor ):
             while self.updateQueue: 
                 self.queueLock.acquire()
                 procedure = self.updateQueue.pop(0)
-                self._handle([procedure])
+                self._handle(procedure)
                 self.queueLock.release()
         else:
             return None
@@ -202,30 +220,43 @@ class WinfreyClient( WinfreyEditor ):
     def interrupt( self ):
         self.unsubscribe();
 
-    def _handleQueue( self, procedures ): 
+<<<<<<< HEAD
+    def _handleQueue( self, procedure ): 
         if not self.fullyLoaded or self.updateQueue: 
             self.queueLock.acquire()
-            for procedure in procedures:
-                self.updateQueue.append(procedure)
+            self.updateQueue.append(procedure)
             self.queueLock.release()
         else: 
-            self._handle(procedures) 
+            self._handle(procedure) 
 
+    def _handle( self, procedure ):
+        rpc_funcs = {
+                "create_cursor": self.create_cursor,
+                "remove_cursor": self.remove_cursor,
+                "move_cursor": self.move_cursor,
+                "insert_char": self.insert_char,
+        }
+
+        if procedure["uuid"] == self.my_cursor:
+            if procedure["name"] == "echo":
+                self.echo( procedure["args"] )
+            else:
+                return
+=======
     def _handle( self, procedures ):
         for procedure in procedures:
             if procedure["uuid"] == self.my_cursor:
                 if procedure["name"] == "echo":
                     self.echo( procedure["args"] )
                 else:
-                    continue
+                    return
+>>>>>>> message_bundling
 
             f = procedure["name"]
             function = self.rpc_funcs.get( f, None )
             if function:
                 function( *procedure["args"] )
 
-        return
-    
     def _preprocess( self, message ):
         return json.loads( message )
 

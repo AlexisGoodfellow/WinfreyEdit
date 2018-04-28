@@ -5,6 +5,7 @@ import json
 import logging
 import threading
 import argparse
+import ntplib
 from backend import editor_state as WinfreyEditor
 import client as clientpoint
 import server as serverpoint
@@ -32,6 +33,14 @@ class WinfreyServer( WinfreyEditor ):
         self.endpoint = serverpoint.Server( interact_address, broadcast_address, self.logger )
         super().__init__( filename )                 
 
+        self.rpc_funcs = {
+                "subscribe": self.subscribe,
+                "unsubscribe": self.unsubscribe,
+                "move_cursor": self.move_cursor,
+                "insert_char": self.insert_char,
+                "echo_response": self.echo_response
+        }
+
         save_thread = threading.Thread( target=self.save )
 
         self.endpoint.startBackground( preprocess=self._preprocess, handler=self._handle, postprocess=self._postprocess, pollTimeout = 2000 )
@@ -43,18 +52,19 @@ class WinfreyServer( WinfreyEditor ):
             print( "Saving...." )
             self.write( "temp.txt" )
 
+
     def subscribe( self ):
         new_uuid = uuid.uuid4().int
         print( "Created new user with UUID " + str(new_uuid) )
         self.create_cursor(str(new_uuid))
-        self.endpoint.broadcast( serialize( new_uuid, "create_cursor", new_uuid ) )
+        self.endpoint.broadcast( '[' + serialize( new_uuid, "create_cursor", new_uuid ) + ']')
 
         return {"status": "subscribed", "other": {"uuid": new_uuid, "file": self.rows, "cursors": self.cursors }}
 
     def unsubscribe( self, uuid ):
         print( "User " + uuid + " left." )
         self.remove_cursor( uuid );
-        self.endpoint.broadcast( serialize( uuid, "remove_cursor", uuid ) )
+        self.endpoint.broadcast( '[' + serialize( uuid, "remove_cursor", uuid ) + ']' )
 
     def create_cursor( self, cid ):
         super().create_cursor( cid )
@@ -66,7 +76,6 @@ class WinfreyServer( WinfreyEditor ):
 
     def move_cursor( self, cid, direction ):
         super().move_cursor( cid, direction )
-        self.endpoint.broadcast( serialize( cid, "echo", cid ) )
         return {"status": "ok", "other": ""}
 
     def insert_char( self, cid, char ):
@@ -74,31 +83,36 @@ class WinfreyServer( WinfreyEditor ):
         return {"status": "ok", "other": ""}
 
     def echo_response( self, message ):
-        print("ECHO" + message)
+        print("ECHO " + message)
         return {"status": "ok", "other": ""}
 
     def no_such_function(*args):
         return {"status": "fail", "other": "No RPC matches this contract"}
 
     def _handle( self, procedure ):
-        rpc_funcs = {
-                "subscribe": self.subscribe,
-                "unsubscribe": self.unsubscribe,
-                "move_cursor": self.move_cursor,
-                "insert_char": self.insert_char,
-                "echo_response": self.echo_response
-        }
 
         f = procedure["name"]
 
-        function = rpc_funcs.get( f, self.no_such_function )
-
-        reply = function( *procedure["args"] )
-        
-        if f == "move_cursor" or f == "insert_char":
-           self.endpoint.broadcast( serialize( procedure["uuid"], procedure["name"], *procedure["args"] ) )
+        if f == "subscribe" or f == "unsubscribe":
+            reply = self._apply_function( f, *procedure["args"] )
+        else:
+            reply = self._bundle_and_broadcast([procedure])
 
         return reply
+
+    def _apply_function( self, name, *args ):
+        function = self.rpc_funcs.get( name, self.no_such_function )
+        return function( *args )
+
+    def _bundle_and_broadcast( self, procedures ):
+        """ Call when the buffer of messages is ready to be sent.
+            Takes an array of messages (should already be sorted)
+            Messages should not include "subscribe" or "unsubscribe" functions """
+
+        for procedure in procedures:
+            self._apply_function( procedure["name"], *procedure["args"] )
+
+        self.endpoint.broadcast( json.dumps( procedures ) )
 
     def _preprocess( self, message ):
         return deserialize( message )
@@ -118,19 +132,46 @@ class WinfreyClient( WinfreyEditor ):
         self.queueLock = threading.Lock()
         self.fullyLoaded = False
 
+        self.rpc_funcs = {
+                "create_cursor": self.create_cursor,
+                "remove_cursor": self.remove_cursor,
+                "move_cursor": self.move_cursor,
+               "insert_char": self.insert_char
+        }
+
+        self.offset = 0
+        self.time_thread = threading.Thread( target=self.get_time )
+        self.timelock = threading.Lock()
+        self.ntpclient = ntplib.NTPClient()
+
+        self.time_thread.start()
         self.subscribe()
         self.G.launch()
 
+    def get_time( self ):
+        while True:
+            time.sleep(30)
+            response = self.ntpclient.request('0.pool.ntp.org', version=3)
+            self.timelock.acquire()
+            self.offset = response.tx_time - time.time()
+            self.timelock.release()
+
     def move_my_cursor( self, direction ):
         super().move_my_cursor( direction )
-        reply = self.endpoint.send( serialize( self.my_cursor, "move_cursor", self.my_cursor, direction ))
+        self.timelock.acquire()
+        ltime = time.time() - self.offset
+        self.timelock.release()
+        reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "move_cursor", "args": [str(self.my_cursor), str(direction)], "time": str(ltime)}) )
+
+    def echo( self, message ):
+        reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "echo_response", "args": message} ))
 
     def insert_my_char( self, char ):
         super().insert_my_char( char )
-        reply = self.endpoint.send( serialize( self.my_cursor, "insert_char", self.my_cursor, char ))
-
-    def echo( self, message ):
-        reply = self.endpoint.send( serialize(self.my_cursor, "echo_response", message))
+        self.timelock.acquire()
+        ltime = time.time() - self.offset
+        self.timelock.release()
+        reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "insert_char", "args": [str(self.my_cursor), str(char)], "time": str(ltime)}) )
 
     def subscribe( self ):
         reply = self.endpoint.send( serialize( 0, "subscribe" ), preprocess=self._preprocess_indiv )
@@ -191,6 +232,9 @@ class WinfreyClient( WinfreyEditor ):
         return
     
     def _preprocess( self, message ):
+        return json.loads( message )
+
+    def _preprocess_OLD( self, message ):
         return deserialize( message )
 
     def _preprocess_indiv( self, message ):

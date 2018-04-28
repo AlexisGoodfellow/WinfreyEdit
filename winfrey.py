@@ -66,10 +66,15 @@ class WinfreyServer( WinfreyEditor ):
 
     def move_cursor( self, cid, direction ):
         super().move_cursor( cid, direction )
+        self.endpoint.broadcast( serialize( cid, "echo", cid ) )
         return {"status": "ok", "other": ""}
 
     def insert_char( self, cid, char ):
         super().insert_char( cid, char )
+        return {"status": "ok", "other": ""}
+
+    def echo_response( self, message ):
+        print("ECHO" + message)
         return {"status": "ok", "other": ""}
 
     def no_such_function(*args):
@@ -80,7 +85,8 @@ class WinfreyServer( WinfreyEditor ):
                 "subscribe": self.subscribe,
                 "unsubscribe": self.unsubscribe,
                 "move_cursor": self.move_cursor,
-                "insert_char": self.insert_char
+                "insert_char": self.insert_char,
+                "echo_response": self.echo_response
         }
 
         f = procedure["name"]
@@ -120,6 +126,9 @@ class WinfreyClient( WinfreyEditor ):
         super().insert_my_char( char )
         reply = self.endpoint.send( serialize( self.my_cursor, "insert_char", self.my_cursor, char ))
 
+    def echo( self, message ):
+        reply = self.endpoint.send( serialize(self.my_cursor, "echo_response", message))
+
     def subscribe( self ):
         reply = self.endpoint.send( serialize( 0, "subscribe" ), preprocess=self._preprocess_indiv )
         if reply["status"] == "subscribed":
@@ -151,7 +160,10 @@ class WinfreyClient( WinfreyEditor ):
         }
 
         if procedure["uuid"] == self.my_cursor:
-            return
+            if procedure["name"] == "echo":
+                self.echo( procedure["args"] )
+            else:
+                return
 
         f = procedure["name"]
         function = rpc_funcs.get( f, None )

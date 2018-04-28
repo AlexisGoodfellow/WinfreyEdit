@@ -37,15 +37,13 @@ class WinfreyServer( WinfreyEditor ):
                 "subscribe": self.subscribe,
                 "unsubscribe": self.unsubscribe,
                 "move_cursor": self.move_cursor,
-                "insert_char": self.insert_char
+                "insert_char": self.insert_char,
+                "echo_response": self.echo_response
         }
-
-        self.TEST_ARRAY = []
-
 
         save_thread = threading.Thread( target=self.save )
 
-        self.endpoint.startBackground( preprocess=self._preprocess, handler=self._handle_TEST, postprocess=self._postprocess, pollTimeout = 2000 )
+        self.endpoint.startBackground( preprocess=self._preprocess, handler=self._handle, postprocess=self._postprocess, pollTimeout = 2000 )
         save_thread.start()
 
     def save( self ):
@@ -84,58 +82,37 @@ class WinfreyServer( WinfreyEditor ):
         super().insert_char( cid, char )
         return {"status": "ok", "other": ""}
 
+    def echo_response( self, message ):
+        print("ECHO " + message)
+        return {"status": "ok", "other": ""}
+
     def no_such_function(*args):
         return {"status": "fail", "other": "No RPC matches this contract"}
 
-    def _handle_TEST( self, procedure ):
+    def _handle( self, procedure ):
+
         f = procedure["name"]
 
         if f == "subscribe" or f == "unsubscribe":
-            function = self.rpc_funcs.get( f, self.no_such_function )
-
-            reply = function( *procedure["args"] )
-
+            reply = self._apply_function( f, *procedure["args"] )
         else:
-            self.TEST_ARRAY.append( procedure )
-            reply = {"status": "ok", "other": ""}
-
-            if len(self.TEST_ARRAY) == 5:
-                self._bundle_and_broadcast(self.TEST_ARRAY)
-                self.TEST_ARRAY = []
+            reply = self._bundle_and_broadcast([procedure])
 
         return reply
 
-    def _handle( self, procedure ):
-        rpc_funcs = {
-                "subscribe": self.subscribe,
-                "unsubscribe": self.unsubscribe,
-                "move_cursor": self.move_cursor,
-                "insert_char": self.insert_char
-        }
-
-        f = procedure["name"]
-
-        function = rpc_funcs.get( f, self.no_such_function )
-
-        reply = function( *procedure["args"] )
-        
-        if f == "move_cursor" or f == "insert_char":
-           self.endpoint.broadcast( serialize( procedure["uuid"], procedure["name"], *procedure["args"] ) )
-
-        return reply
+    def _apply_function( self, name, *args ):
+        function = self.rpc_funcs.get( name, self.no_such_function )
+        return function( *args )
 
     def _bundle_and_broadcast( self, procedures ):
-
-        messages = []
+        """ Call when the buffer of messages is ready to be sent.
+            Takes an array of messages (should already be sorted)
+            Messages should not include "subscribe" or "unsubscribe" functions """
 
         for procedure in procedures:
-            f = procedure["name"]
+            self._apply_function( procedure["name"], *procedure["args"] )
 
-            function = self.rpc_funcs.get( f, self.no_such_function )
-            function( *procedure["args"] )
-            messages.append(procedure)
-
-        self.endpoint.broadcast( json.dumps( messages ) )
+        self.endpoint.broadcast( json.dumps( procedures ) )
 
     def _preprocess( self, message ):
         return deserialize( message )
@@ -155,7 +132,7 @@ class WinfreyClient( WinfreyEditor ):
                 "create_cursor": self.create_cursor,
                 "remove_cursor": self.remove_cursor,
                 "move_cursor": self.move_cursor,
-                "insert_char": self.insert_char,
+               "insert_char": self.insert_char
         }
 
         self.offset = 0
@@ -171,9 +148,9 @@ class WinfreyClient( WinfreyEditor ):
     def get_time( self ):
         while True:
             time.sleep(30)
-            self.timelock.acquire()
             response = self.ntpclient.request('0.pool.ntp.org', version=3)
-            self.offset = time.time() - response.tx_time
+            self.timelock.acquire()
+            self.offset = response.tx_time - time.time()
             self.timelock.release()
 
     def move_my_cursor( self, direction ):
@@ -181,14 +158,17 @@ class WinfreyClient( WinfreyEditor ):
         self.timelock.acquire()
         ltime = time.time() - self.offset
         self.timelock.release()
-        reply = self.endpoint.send( {"uuid": str(self.my_cursor), "name": "move_cursor", "args": [str(self.my_cursor) str(direction)], "time": str(ltime)} )
+        reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "move_cursor", "args": [str(self.my_cursor), str(direction)], "time": str(ltime)}) )
+
+    def echo( self, message ):
+        reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "echo_response", "args": message} ))
 
     def insert_my_char( self, char ):
         super().insert_my_char( char )
         self.timelock.acquire()
         ltime = time.time() - self.offset
         self.timelock.release()
-        reply = self.endpoint.send( {"uuid": str(self.my_cursor), "name": "insert_char", "args": [str(self.my_cursor) str(char)], "time": str(ltime)} )
+        reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "insert_char", "args": [str(self.my_cursor), str(char)], "time": str(ltime)}) )
 
     def subscribe( self ):
         reply = self.endpoint.send( serialize( 0, "subscribe" ), preprocess=self._preprocess_indiv )
@@ -212,22 +192,13 @@ class WinfreyClient( WinfreyEditor ):
     def interrupt( self ):
         self.unsubscribe();
 
-    def _handle_OLD( self, procedure ):
-
-        if procedure["uuid"] == self.my_cursor:
-            return
-
-        f = procedure["name"]
-        function = rpc_funcs.get( f, None )
-        if function:
-            function( *procedure["args"] )
-
-        return
-   
     def _handle( self, procedures ):
         for procedure in procedures:
             if procedure["uuid"] == self.my_cursor:
-                return
+                if procedure["name"] == "echo":
+                    self.echo( procedure["args"] )
+                else:
+                    return
 
             f = procedure["name"]
             function = self.rpc_funcs.get( f, None )

@@ -113,9 +113,12 @@ class WinfreyClient( WinfreyEditor ):
         self.endpoint = clientpoint.Client( remote_address, broadcast_address, self.logger )
    
         super().__init__()
+        # For update buffering
+        self.updateQueue = []
+        self.queueLock = threading.Lock()
+        self.fullyLoaded = False
 
         self.subscribe()
-        self.endpoint.startBackground( self._handle, preprocess=self._preprocess )
         self.G.launch()
 
     def move_my_cursor( self, direction ):
@@ -131,6 +134,7 @@ class WinfreyClient( WinfreyEditor ):
 
     def subscribe( self ):
         reply = self.endpoint.send( serialize( 0, "subscribe" ), preprocess=self._preprocess_indiv )
+        self.endpoint.startBackground( self._handleQueue, preprocess=self._preprocess )
         if reply["status"] == "subscribed":
             self.my_cursor = str(reply["other"]["uuid"])
             self.rows = reply["other"]["file"]
@@ -140,6 +144,12 @@ class WinfreyClient( WinfreyEditor ):
             for cid in reply["other"]["cursors"]:
                 cursor = reply["other"]["cursors"][cid]
                 self.create_cursor( cid, cursor["cx"], cursor["cy"] )
+            self.fullyLoaded = True
+            while self.updateQueue: 
+                self.queueLock.acquire()
+                procedure = self.updateQueue.pop(0)
+                self._handle(procedure)
+                self.queueLock.release()
         else:
             return None
 
@@ -150,6 +160,14 @@ class WinfreyClient( WinfreyEditor ):
 
     def interrupt( self ):
         self.unsubscribe();
+
+    def _handleQueue( self, procedure ): 
+        if not self.fullyLoaded or self.updateQueue: 
+            self.queueLock.acquire()
+            self.updateQueue.append(procedure)
+            self.queueLock.release()
+        else: 
+            self._handle(procedure) 
 
     def _handle( self, procedure ):
         rpc_funcs = {

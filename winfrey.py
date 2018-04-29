@@ -41,7 +41,11 @@ class WinfreyServer( WinfreyEditor ):
                 "echo_response": self.echo_response
         }
 
+        # Number of seconds between batches of updates
+        self.batchDelay = .25
         save_thread = threading.Thread( target=self.save )
+        self.subscribers = []
+        self.latencyAverages = {}
 
         self.endpoint.startBackground( preprocess=self._preprocess, handler=self._handle, postprocess=self._postprocess, pollTimeout = 2000 )
         save_thread.start()
@@ -52,9 +56,9 @@ class WinfreyServer( WinfreyEditor ):
             print( "Saving...." )
             self.write( "temp.txt" )
 
-
     def subscribe( self ):
         new_uuid = uuid.uuid4().int
+        self.subscribers.append(str(new_uuid))
         print( "Created new user with UUID " + str(new_uuid) )
         self.create_cursor(str(new_uuid))
         self.endpoint.broadcast( '[' + serialize( new_uuid, "create_cursor", new_uuid ) + ']')
@@ -63,6 +67,8 @@ class WinfreyServer( WinfreyEditor ):
 
     def unsubscribe( self, uuid ):
         print( "User " + uuid + " left." )
+        self.subscribers.remove(uuid)
+        del self.latencyAverages[uuid]
         self.remove_cursor( uuid );
         self.endpoint.broadcast( '[' + serialize( uuid, "remove_cursor", uuid ) + ']' )
 
@@ -83,7 +89,8 @@ class WinfreyServer( WinfreyEditor ):
         return {"status": "ok", "other": ""}
 
     def echo_response( self, message ):
-        print("ECHO " + message)
+        for m in message: 
+            print("ECHO " + m)
         return {"status": "ok", "other": ""}
 
     def no_such_function(*args):
@@ -95,6 +102,9 @@ class WinfreyServer( WinfreyEditor ):
 
         if f == "subscribe" or f == "unsubscribe":
             reply = self._apply_function( f, *procedure["args"] )
+        elif f == "echo_response": 
+            self.updateBatchDelay(procedure["uuid"], procedure["args"])
+            reply = self._apply_function( f, procedure["args"] )
         else:
             reply = self._bundle_and_broadcast([procedure])
 
@@ -103,6 +113,23 @@ class WinfreyServer( WinfreyEditor ):
     def _apply_function( self, name, *args ):
         function = self.rpc_funcs.get( name, self.no_such_function )
         return function( *args )
+
+    def updateBatchDelay( self, uuid, message ): 
+        if uuid in self.subscribers: 
+            avg_rtt = 0.0
+            i = 0
+            t = time.time()
+            while i < 5: 
+                avg_rtt += t - (float(message[i]) - (.01 * (5 - i)))
+                i += 1
+            avg_rtt /= 5
+            self.latencyAverages[uuid] = avg_rtt
+            maxLatency = 0
+            for k, v in self.latencyAverages.items(): 
+                if maxLatency < v: 
+                    maxLatency = v
+            self.batchDelay = maxLatency + .05
+            print("NEW BATCH DELAY: " + str(self.batchDelay))
 
     def _bundle_and_broadcast( self, procedures ):
         """ Call when the buffer of messages is ready to be sent.
@@ -136,7 +163,7 @@ class WinfreyClient( WinfreyEditor ):
                 "create_cursor": self.create_cursor,
                 "remove_cursor": self.remove_cursor,
                 "move_cursor": self.move_cursor,
-               "insert_char": self.insert_char
+                "insert_char": self.insert_char
         }
 
         self.offset = 0
@@ -150,11 +177,12 @@ class WinfreyClient( WinfreyEditor ):
 
     def get_time( self ):
         while True:
-            time.sleep(30)
             response = self.ntpclient.request('0.pool.ntp.org', version=3)
             self.timelock.acquire()
             self.offset = response.tx_time - time.time()
+            self.echo()
             self.timelock.release()
+            time.sleep(15)
 
     def move_my_cursor( self, direction ):
         super().move_my_cursor( direction )
@@ -163,8 +191,17 @@ class WinfreyClient( WinfreyEditor ):
         self.timelock.release()
         reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "move_cursor", "args": [str(self.my_cursor), str(direction)], "time": str(ltime)}) )
 
-    def echo( self, message ):
-        reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "echo_response", "args": message} ))
+    def echo( self ):
+        i = 0
+        message = []
+        while i < 5: 
+            trueTime = time.time() - self.offset
+            message.append(str(trueTime))
+            time.sleep(.01)
+            i = i + 1
+        reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor),
+                                                "name": "echo_response", 
+                                                "args": message} ))
 
     def insert_my_char( self, char ):
         super().insert_my_char( char )

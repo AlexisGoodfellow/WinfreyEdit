@@ -200,7 +200,6 @@ class WinfreyClient( WinfreyEditor ):
             time.sleep(15)
 
     def move_my_cursor( self, direction ):
-        super().move_my_cursor( direction )
         self.timelock.acquire()
         ltime = time.time() - self.offset
         self.timelock.release()
@@ -219,7 +218,6 @@ class WinfreyClient( WinfreyEditor ):
                                                 "args": message} ))
 
     def insert_my_char( self, char ):
-        super().insert_my_char( char )
         self.timelock.acquire()
         ltime = time.time() - self.offset
         self.timelock.release()
@@ -265,24 +263,17 @@ class WinfreyClient( WinfreyEditor ):
 
     def _handle( self, procedures ):
         for procedure in procedures:
-            if procedure["uuid"] == self.my_cursor:
-                if procedure["name"] == "echo":
-                    self.echo( procedure["args"] )
-                else:
-                    continue
-
-            f = procedure["name"]
-            function = self.rpc_funcs.get( f, None )
-            if function:
-                function( *procedure["args"] )
-
+            if procedure["uuid"] == self.my_cursor and procedure["name"] == "echo":
+                self.echo( procedure["args"] )
+            else:
+                f = procedure["name"]
+                function = self.rpc_funcs.get( f, None )
+                if function:
+                    function( *procedure["args"] )
         return
     
     def _preprocess( self, message ):
         return json.loads( message )
-
-    def _preprocess_OLD( self, message ):
-        return deserialize( message )
 
     def _preprocess_indiv( self, message ):
         return json.loads( message )

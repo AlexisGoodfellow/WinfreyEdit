@@ -1,4 +1,5 @@
 import sys
+import queue
 import time
 import uuid
 import json
@@ -53,11 +54,8 @@ class WinfreyServer( WinfreyEditor ):
 
 
         # Buffer Queues for incoming edits
-        self.Q1 = []
-        self.Q2 = []
-        self.q1lock = threading.Lock()
-        self.q2lock = threading.Lock()
-        self.activeQ = self.Q1
+        self.Q1 = queue.Queue()
+        self.Q2 = queue.Queue()
         self.buf_thread = threading.Thread(target=self._bundle_and_broadcast)
         self.buf_thread.start()
 
@@ -116,10 +114,10 @@ class WinfreyServer( WinfreyEditor ):
             self.updateBatchDelay(procedure["uuid"], procedure["args"])
             reply = self._apply_function( f, procedure["args"] )
         else:
-            if self.q1lock.locked():
-                self.Q2.append(procedure)
-            elif self.q2lock.locked():
-                self.Q1.append(procedure)
+            if self.Q1.empty():
+                self.Q2.put(procedure)
+            elif self.Q2.empty():
+                self.Q1.put(procedure)
 
             reply = None
 
@@ -149,21 +147,20 @@ class WinfreyServer( WinfreyEditor ):
     def _bundle_and_broadcast( self ):
         while True:
             time.sleep(0.05)
+            ps = []
             
-            if len(self.Q1) == 0:
-                self.q2lock.acquire()
-                for procedure in self.Q2:
+            if self.Q1.empty():
+                while not self.Q2.empty():
+                    ps.append(self.Q2.get())
+                for procedure in ps:
                     self._apply_function( procedure["name"], *procedure["args"] )
-                    self.Q2.remove(procedure)
-                self.q2lock.release()
-                self.endpoint.broadcast( json.dumps( self.Q2 ) )
-            elif len(self.Q2) == 0:
-                self.q1lock.acquire()
-                for procedure in self.Q1:
+                self.endpoint.broadcast( json.dumps(ps) )
+            elif self.Q2.empty():
+                while not self.Q1.empty():
+                    ps.append(self.Q1.get())
+                for procedure in ps:
                     self._apply_function( procedure["name"], *procedure["args"] )
-                    self.Q1.remove(procedure)
-                self.q1lock.release()
-                self.endpoint.broadcast( json.dumps( self.Q1 ) )
+                self.endpoint.broadcast( json.dumps(ps) )
 
     def _preprocess( self, message ):
         return deserialize( message )

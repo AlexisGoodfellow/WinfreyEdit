@@ -10,6 +10,7 @@ from backend import editor_state as WinfreyEditor
 import client as clientpoint
 import server as serverpoint
 
+
 def serialize( uid, name, *args ):
     message = {
             "uuid": uid,
@@ -49,6 +50,14 @@ class WinfreyServer( WinfreyEditor ):
 
         self.endpoint.startBackground( preprocess=self._preprocess, handler=self._handle, postprocess=self._postprocess, pollTimeout = 2000 )
         save_thread.start()
+
+
+        # Buffer Queues for incoming edits
+        self.Q1 = []
+        self.Q2 = []
+        self.activeQ = self.Q1
+        self.buf_thread = threading.Thread(target=self._bundle_and_broadcast)
+        self.buf_thread.start()
 
     def save( self ):
         while True:
@@ -97,8 +106,8 @@ class WinfreyServer( WinfreyEditor ):
         return {"status": "fail", "other": "No RPC matches this contract"}
 
     def _handle( self, procedure ):
-
         f = procedure["name"]
+        reply = None
 
         if f == "subscribe" or f == "unsubscribe":
             reply = self._apply_function( f, *procedure["args"] )
@@ -106,7 +115,12 @@ class WinfreyServer( WinfreyEditor ):
             self.updateBatchDelay(procedure["uuid"], procedure["args"])
             reply = self._apply_function( f, procedure["args"] )
         else:
-            reply = self._bundle_and_broadcast([procedure])
+            if len(self.Q1) == 0:
+                self.activeQ = self.Q2
+            elif len(self.Q2) == 0:
+                self.activeQ = self.Q1
+
+            self.activeQ.append(procedure)
 
         return reply
 
@@ -131,30 +145,14 @@ class WinfreyServer( WinfreyEditor ):
             self.batchDelay = maxLatency + .05
             print("NEW BATCH DELAY: " + str(self.batchDelay))
 
-    def _bundle_and_broadcast( self, procedures ):
-        """ Call when the buffer of messages is ready to be sent.
-            Takes an array of messages (should already be sorted)
-            Messages should not include "subscribe" or "unsubscribe" functions """
-        Q1 = []
-        Q2 = []
-        q = None
+    def _bundle_and_broadcast( self ):
+        while True:
+            time.sleep(0.05)
+            for procedure in self.activeQ:
+                self._apply_function( procedure["name"], *procedure["args"] )
+                self.activeQ.pop(0)
 
-        """
-        if time < x:
-            if len(Q1) == 0:
-                q = Q1
-            elif len(Q2) == 0:
-                q = Q2
-            q.extend(procedures)
-        else:
-            for procedure in q
-                self._apply_function(procedure["name"], *procedure["args"])
-                
-        """
-        for procedure in procedures:
-            self._apply_function( procedure["name"], *procedure["args"] )
-
-        self.endpoint.broadcast( json.dumps( procedures ) )
+            self.endpoint.broadcast( json.dumps( self.activeQ ) )
 
     def _preprocess( self, message ):
         return deserialize( message )

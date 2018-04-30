@@ -56,6 +56,7 @@ class WinfreyServer( WinfreyEditor ):
         # Buffer Queues for incoming edits
         self.Q1 = queue.Queue()
         self.Q2 = queue.Queue()
+        self.activeQ = self.Q1
         self.buf_thread = threading.Thread(target=self._bundle_and_broadcast)
         self.buf_thread.start()
 
@@ -114,10 +115,7 @@ class WinfreyServer( WinfreyEditor ):
             self.updateBatchDelay(procedure["uuid"], procedure["args"])
             reply = self._apply_function( f, procedure["args"] )
         else:
-            if self.Q1.empty():
-                self.Q2.put(procedure)
-            elif self.Q2.empty():
-                self.Q1.put(procedure)
+            self.activeQ.put(procedure)
 
             reply = None
 
@@ -149,6 +147,11 @@ class WinfreyServer( WinfreyEditor ):
             time.sleep(self.batchDelay)
             ps = []
             
+            if self.activeQ is self.Q1: 
+                self.activeQ = self.Q2
+            else: 
+                self.activeQ = self.Q1
+
             if self.Q1.empty():
                 while not self.Q2.empty():
                     ps.append(self.Q2.get())
@@ -201,7 +204,10 @@ class WinfreyClient( WinfreyEditor ):
 
     def get_time( self ):
         while True:
-            response = self.ntpclient.request('0.pool.ntp.org', version=3)
+            try: 
+                response = self.ntpclient.request('0.pool.ntp.org', version=3)
+            except ntplib.NTPException: 
+                self.offset = 0 # We don't know any better, so keep it at 0
             self.timelock.acquire()
             self.offset = response.tx_time - time.time()
             self.echo()

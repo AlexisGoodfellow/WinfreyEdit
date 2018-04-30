@@ -4,6 +4,8 @@ Object Class: Keter Neutralized Hiemal
 
 Special Containment Procedures: At least twelve afflicted specimens from each species susceptible to SCP-3240 should be in Foundation custody. Captive specimens are to be contained in enclosures that mimic their natural biome, but do not allow for contact with unaffected members of their species. Populations of susceptible species should be monitored in locations of appearance and locations of predicted future appearance. The location of future occurrences is determined using the Lowell-Kost Algorithm described in Document 3240-Asterion.
 
+Testing 12345 help help Special Containment Procedures: At l3east twelve aff,.licted  specimens from each species susceptible to S
+
 Description: SCP-3240 is a learned behavior observed in certain predatory animals. In order for a species to be able to exhibit SCP-3240, it must be a predatory animal that resides in one of the following biomes: taiga, chaparral, tundra, desert or mountain. Affected animals show no other behavioral anomalies except that they no longer engage in hunting behaviors.
 
 Known affected species include corsac foxes, gyrfalcons, arctic foxes, leopard seals, Canadian lynxes, snow leopards, king cobras, arctic wolves, goshawks, diamondback rattlesnakes, saker falcons, coyotes, snowy owls, and burrowing owls.

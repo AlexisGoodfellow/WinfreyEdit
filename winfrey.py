@@ -155,20 +155,17 @@ class WinfreyServer( WinfreyEditor ):
             if self.activeQ is self.Q1: 
                 while not self.Q1.empty():
                     ps.append(self.Q1.get())
-                ps.sort(key=lambda k: k["time"])
-                for procedure in ps:
-                    self._apply_function( procedure["name"], *procedure["args"] )
-                self.endpoint.broadcast( json.dumps(ps) )
                 self.activeQ = self.Q2
             else: 
                 while not self.Q2.empty():
                     ps.append(self.Q2.get())
-                ps.sort(key=lambda k: k["time"])
-                for procedure in ps:
-                    self._apply_function( procedure["name"], *procedure["args"] )
-                self.endpoint.broadcast( json.dumps(ps))
                 self.activeQ = self.Q1
             self.activeLock.release()
+            # This section is not critical, so the active lock need not be owned
+            ps.sort(key=lambda k: k["time"])
+            for procedure in ps:
+                self._apply_function( procedure["name"], *procedure["args"] )
+            self.endpoint.broadcast( json.dumps(ps) )
             ps.clear()
 
     def _preprocess( self, message ):

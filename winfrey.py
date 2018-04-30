@@ -135,7 +135,22 @@ class WinfreyServer( WinfreyEditor ):
         """ Call when the buffer of messages is ready to be sent.
             Takes an array of messages (should already be sorted)
             Messages should not include "subscribe" or "unsubscribe" functions """
+        Q1 = []
+        Q2 = []
+        q = None
 
+        """
+        if time < x:
+            if len(Q1) == 0:
+                q = Q1
+            elif len(Q2) == 0:
+                q = Q2
+            q.extend(procedures)
+        else:
+            for procedure in q
+                self._apply_function(procedure["name"], *procedure["args"])
+                
+        """
         for procedure in procedures:
             self._apply_function( procedure["name"], *procedure["args"] )
 

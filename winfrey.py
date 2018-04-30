@@ -197,6 +197,7 @@ class WinfreyClient( WinfreyEditor ):
         }
 
         self.offset = 0
+        self.stopped = False
         self.time_thread = threading.Thread( target=self.get_time )
         self.timelock = threading.Lock()
         self.ntpclient = ntplib.NTPClient()
@@ -215,7 +216,10 @@ class WinfreyClient( WinfreyEditor ):
             self.offset = response.tx_time - time.time()
             self.echo()
             self.timelock.release()
-            time.sleep(15)
+            for i in range(0, 5):
+                if self.stopped:
+                    return
+                time.sleep(3)
 
     def move_my_cursor( self, direction ):
         self.timelock.acquire()
@@ -231,7 +235,8 @@ class WinfreyClient( WinfreyEditor ):
             message.append(str(trueTime))
             time.sleep(.01)
             i = i + 1
-        reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor),
+        if not self.stopped:
+            reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor),
                                                 "name": "echo_response", 
                                                 "args": message} ))
 
@@ -268,7 +273,8 @@ class WinfreyClient( WinfreyEditor ):
         self.endpoint.stop()
 
     def interrupt( self ):
-        self.unsubscribe();
+        self.unsubscribe()
+        self.stopped = True
 
     def _handleQueue( self, procedures ): 
         if not self.fullyLoaded or self.updateQueue: 

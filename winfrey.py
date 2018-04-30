@@ -165,7 +165,7 @@ class WinfreyServer( WinfreyEditor ):
                 self.activeQ = self.Q1
             self.activeLock.release()
             # This section is not critical, so the active lock need not be owned
-            ps.sort(key=lambda k: k["time"])
+            ps.sort(key=lambda k: float(k["time"]))
             for procedure in ps:
                 self._apply_function( procedure["name"], *procedure["args"] )
             self.endpoint.broadcast( json.dumps(ps) )

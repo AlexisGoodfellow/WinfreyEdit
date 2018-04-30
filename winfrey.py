@@ -146,7 +146,7 @@ class WinfreyServer( WinfreyEditor ):
 
     def _bundle_and_broadcast( self ):
         while True:
-            time.sleep(0.05)
+            time.sleep(self.batchDelay)
             ps = []
             
             if self.Q1.empty():
@@ -154,13 +154,13 @@ class WinfreyServer( WinfreyEditor ):
                     ps.append(self.Q2.get())
                 for procedure in ps:
                     self._apply_function( procedure["name"], *procedure["args"] )
-                self.endpoint.broadcast( json.dumps(ps) )
+                self.endpoint.broadcast( json.dumps(sorted(ps, key=lambda k: k["time"])))
             elif self.Q2.empty():
                 while not self.Q1.empty():
                     ps.append(self.Q1.get())
                 for procedure in ps:
                     self._apply_function( procedure["name"], *procedure["args"] )
-                self.endpoint.broadcast( json.dumps(ps) )
+                self.endpoint.broadcast( json.dumps(sorted(ps, key=lambda k: k["time"])) )
 
     def _preprocess( self, message ):
         return deserialize( message )

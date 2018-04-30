@@ -107,7 +107,6 @@ class WinfreyServer( WinfreyEditor ):
 
     def _handle( self, procedure ):
         f = procedure["name"]
-        reply = None
 
         if f == "subscribe" or f == "unsubscribe":
             reply = self._apply_function( f, *procedure["args"] )
@@ -121,6 +120,7 @@ class WinfreyServer( WinfreyEditor ):
                 self.activeQ = self.Q1
 
             self.activeQ.append(procedure)
+            reply = None
 
         return reply
 
@@ -150,7 +150,7 @@ class WinfreyServer( WinfreyEditor ):
             time.sleep(0.05)
             for procedure in self.activeQ:
                 self._apply_function( procedure["name"], *procedure["args"] )
-                self.activeQ.pop(0)
+                self.activeQ.remove(procedure)
 
             self.endpoint.broadcast( json.dumps( self.activeQ ) )
 

@@ -52,6 +52,13 @@ class WinfreyServer( WinfreyEditor ):
         self.endpoint.startBackground( preprocess=self._preprocess, handler=self._handle, postprocess=self._postprocess, pollTimeout = 2000 )
         save_thread.start()
 
+        self.offset = 0
+        self.stopped = False
+        self.time_thread = threading.Thread( target=self.get_time )
+        self.timelock = threading.Lock()
+        self.ntpclient = ntplib.NTPClient()
+
+        self.time_thread.start()
 
         # Buffer Queues for incoming edits
         self.Q1 = queue.Queue()
@@ -60,6 +67,17 @@ class WinfreyServer( WinfreyEditor ):
         self.activeLock = threading.Lock()
         self.buf_thread = threading.Thread(target=self._bundle_and_broadcast)
         self.buf_thread.start()
+
+    def get_time( self ):
+        while True:
+            try: 
+                response = self.ntpclient.request('0.pool.ntp.org', version=3)
+            except ntplib.NTPException: 
+                self.offset = 0 # We don't know any better, so keep it at 0
+            self.timelock.acquire()
+            self.offset = response.tx_time - time.time()
+            self.timelock.release()
+            time.sleep(30)
 
     def save( self ):
         while True:
@@ -116,6 +134,12 @@ class WinfreyServer( WinfreyEditor ):
             self.updateBatchDelay(procedure["uuid"], procedure["args"])
             reply = self._apply_function( f, procedure["args"] )
         else:
+            self.timelock.acquire()
+            is_too_old = (float(procedure["time"]) < (time.time() - self.offset) - self.batchDelay)
+            self.timelock.release()
+            if is_too_old:
+                return {"status": "dropped", "other": "message_too_old"}
+
             self.activeLock.acquire()
             self.activeQ.put(procedure)
             self.activeLock.release()

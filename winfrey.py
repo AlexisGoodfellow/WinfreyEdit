@@ -57,6 +57,7 @@ class WinfreyServer( WinfreyEditor ):
         self.Q1 = queue.Queue()
         self.Q2 = queue.Queue()
         self.activeQ = self.Q1
+        self.activeLock = threading.Lock()
         self.buf_thread = threading.Thread(target=self._bundle_and_broadcast)
         self.buf_thread.start()
 
@@ -115,7 +116,9 @@ class WinfreyServer( WinfreyEditor ):
             self.updateBatchDelay(procedure["uuid"], procedure["args"])
             reply = self._apply_function( f, procedure["args"] )
         else:
+            self.activeLock.acquire()
             self.activeQ.put(procedure)
+            self.activeLock.release()
 
             reply = None
 
@@ -147,10 +150,12 @@ class WinfreyServer( WinfreyEditor ):
             time.sleep(self.batchDelay)
             ps = []
             
+            self.activeLock.acquire()
             if self.activeQ is self.Q1: 
                 self.activeQ = self.Q2
             else: 
                 self.activeQ = self.Q1
+            self.activeLock.release()
 
             if self.Q1.empty():
                 while not self.Q2.empty():

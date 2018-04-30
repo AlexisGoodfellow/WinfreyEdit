@@ -55,6 +55,8 @@ class WinfreyServer( WinfreyEditor ):
         # Buffer Queues for incoming edits
         self.Q1 = []
         self.Q2 = []
+        self.q1lock = threading.Lock()
+        self.q2lock = threading.Lock()
         self.activeQ = self.Q1
         self.buf_thread = threading.Thread(target=self._bundle_and_broadcast)
         self.buf_thread.start()
@@ -114,12 +116,11 @@ class WinfreyServer( WinfreyEditor ):
             self.updateBatchDelay(procedure["uuid"], procedure["args"])
             reply = self._apply_function( f, procedure["args"] )
         else:
-            if len(self.Q1) == 0:
-                self.activeQ = self.Q2
-            elif len(self.Q2) == 0:
-                self.activeQ = self.Q1
+            if self.q1lock.locked():
+                self.Q2.append(procedure)
+            elif self.q2lock.locked():
+                self.Q1.append(procedure)
 
-            self.activeQ.append(procedure)
             reply = None
 
         return reply
@@ -148,11 +149,21 @@ class WinfreyServer( WinfreyEditor ):
     def _bundle_and_broadcast( self ):
         while True:
             time.sleep(0.05)
-            for procedure in self.activeQ:
-                self._apply_function( procedure["name"], *procedure["args"] )
-                self.activeQ.remove(procedure)
-
-            self.endpoint.broadcast( json.dumps( self.activeQ ) )
+            
+            if len(self.Q1) == 0:
+                self.q2lock.acquire()
+                for procedure in self.Q2:
+                    self._apply_function( procedure["name"], *procedure["args"] )
+                    self.Q2.remove(procedure)
+                self.q2lock.release()
+                self.endpoint.broadcast( json.dumps( self.Q2 ) )
+            elif len(self.Q2) == 0:
+                self.q1lock.acquire()
+                for procedure in self.Q1:
+                    self._apply_function( procedure["name"], *procedure["args"] )
+                    self.Q1.remove(procedure)
+                self.q1lock.release()
+                self.endpoint.broadcast( json.dumps( self.Q1 ) )
 
     def _preprocess( self, message ):
         return deserialize( message )

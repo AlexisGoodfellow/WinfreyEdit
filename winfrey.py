@@ -206,7 +206,8 @@ class WinfreyClient( WinfreyEditor ):
     def get_time( self ):
         while True:
             try: 
-                response = self.ntpclient.request('0.pool.ntp.org', version=3)
+                response = self.ntpclient.request('0.pool.ntp.org', version=3,
+                                                  timeout=15)
             except ntplib.NTPException: 
                 self.offset = 0 # We don't know any better, so keep it at 0
             self.timelock.acquire()

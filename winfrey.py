@@ -136,6 +136,7 @@ class WinfreyServer( WinfreyEditor ):
             avg_rtt = 0.0
             i = 0
             t = time.time()
+            print("Current time: " + str(t))
             while i < 5: 
                 avg_rtt += t - (float(message[i]) - (.01 * (5 - i)))
                 i += 1

@@ -64,7 +64,7 @@ class WinfreyServer( WinfreyEditor ):
         while True:
             time.sleep(30)
             print( "Saving...." )
-            self.write( "temp.txt" )
+            self.write( self.fname )
 
     def subscribe( self ):
         new_uuid = uuid.uuid4().int

@@ -157,13 +157,18 @@ class WinfreyServer( WinfreyEditor ):
         return function( *args )
 
     def updateBatchDelay( self, uuid, message ): 
+        """Updates the batch delay baced on the server's internal clock
+           and the timestamps in the echo message bursts that come from the
+           client."""
         if uuid in self.subscribers: 
             avg_rtt = 0.0
             i = 0
             t = time.time()
             print("Current time: " + str(t))
             while i < 5: 
-                avg_rtt += t - (float(message[i]) - (.01 * (5 - i)))
+                # The extra math is to adjust for the 0.01 second sleep delay
+                # between echo messages on the client side
+                avg_rtt += t - (float(message[i]) - (.01 * (4 - i)))
                 i += 1
             avg_rtt /= 5
             self.latencyAverages[uuid] = avg_rtt
@@ -171,6 +176,9 @@ class WinfreyServer( WinfreyEditor ):
             for k, v in self.latencyAverages.items(): 
                 if maxLatency < v: 
                     maxLatency = v
+            # To support all users and accomodate statistical anomalies, we base
+            # the batch update delay on the user with the longest latency plus a
+            # few extra hundredths of a second
             self.batchDelay = maxLatency + .05
             print("NEW BATCH DELAY: " + str(self.batchDelay))
 
@@ -181,8 +189,9 @@ class WinfreyServer( WinfreyEditor ):
             time.sleep(self.batchDelay)
             ps = []
             
+            #### <CRITICAL SECTION - QUEUE CONTEXT SWITCHING> ####
             self.activeLock.acquire()
-            # This implies Q2 is empty
+            # This conditional implies Q2 is empty
             if self.activeQ is self.Q1: 
                 while not self.Q1.empty():
                     ps.append(self.Q1.get())
@@ -192,6 +201,7 @@ class WinfreyServer( WinfreyEditor ):
                     ps.append(self.Q2.get())
                 self.activeQ = self.Q1
             self.activeLock.release()
+            #### </CRITICAL SECTION - QUEUE CONTEXT SWITCHING> ####
             # This section is not critical, so the active lock need not be owned
             ps.sort(key=lambda k: float(k["time"]))
             for procedure in ps:
@@ -200,9 +210,11 @@ class WinfreyServer( WinfreyEditor ):
             ps.clear()
 
     def _preprocess( self, message ):
+        """Deserializes the json messages from the network into Python objects."""
         return deserialize( message )
 
     def _postprocess( self, message ):
+        """Form json messages from Python objects to send across the network."""
         return json.dumps( message )
 
 
@@ -305,6 +317,7 @@ class WinfreyClient( WinfreyEditor ):
                 cursor = reply["other"]["cursors"][cid]
                 self.create_cursor( cid, cursor["cx"], cursor["cy"] )
             self.fullyLoaded = True
+            # Dequeue all queued updates after file fully loads
             while self.updateQueue: 
                 self.queueLock.acquire()
                 procedure = self.updateQueue.pop(0)
@@ -346,9 +359,11 @@ class WinfreyClient( WinfreyEditor ):
         return
     
     def _preprocess( self, message ):
+        """Turns the json messages across the network into Python objects."""
         return json.loads( message )
 
     def _preprocess_indiv( self, message ):
+        """Turns the json messages across the network into Python objects."""
         return json.loads( message )
 
 if __name__ == "__main__":

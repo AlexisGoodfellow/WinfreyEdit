@@ -66,6 +66,7 @@ class WinfreyServer( WinfreyEditor ):
         self.Q2 = queue.Queue()
         self.activeQ = self.Q1
         self.activeLock = threading.Lock()
+        # bundle and broadcast messages in separate thread to preserve fairness
         self.buf_thread = threading.Thread(target=self._bundle_and_broadcast)
         self.buf_thread.start()
 

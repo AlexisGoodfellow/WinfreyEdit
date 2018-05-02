@@ -11,8 +11,8 @@ from backend import editor_state as WinfreyEditor
 import client as clientpoint
 import server as serverpoint
 
-
 def serialize( uid, name, *args ):
+    """Creates a JSON string representation of an update message. Mostly legacy now"""
     message = {
             "uuid": uid,
             "name": name,
@@ -22,6 +22,7 @@ def serialize( uid, name, *args ):
     return json.dumps( message )
 
 def deserialize( message ):
+    """Unpacks a JSON string representation of an update message. Mostly legacy now"""
 
     nobject = json.loads( message )
     if type(nobject) != dict:
@@ -30,7 +31,15 @@ def deserialize( message ):
 
 
 class WinfreyServer( WinfreyEditor ):
+    """A Winfrey file host. Listens for, receives and applies updates from, and broadcasts updates to,
+       connected Winfrey clients."""
     def __init__( self, interact_address, broadcast_address, filename ):
+        """Creates a new instance of WinfreyServer
+
+        interact_address: Port for clients to connect to
+        broadcast_address: Port to broadcast updates over
+        filename: File to host
+        """
         self.logger = logging.getLogger("main")
         self.endpoint = serverpoint.Server( interact_address, broadcast_address, self.logger )
         super().__init__( filename )                 
@@ -61,12 +70,16 @@ class WinfreyServer( WinfreyEditor ):
         self.buf_thread.start()
 
     def save( self ):
+        """Saves the file every thirty seconds"""
+
         while True:
             time.sleep(30)
             print( "Saving...." )
             self.write( self.fname )
 
     def subscribe( self ):
+        """Creates and returns a new user with a unique UUID"""
+
         new_uuid = uuid.uuid4().int
         self.subscribers.append(str(new_uuid))
         print( "Created new user with UUID " + str(new_uuid) )
@@ -76,6 +89,8 @@ class WinfreyServer( WinfreyEditor ):
         return {"status": "subscribed", "other": {"uuid": new_uuid, "file": self.rows, "cursors": self.cursors }}
 
     def unsubscribe( self, uuid ):
+        """Removes the user with the given UUID"""
+
         print( "User " + uuid + " left." )
         self.subscribers.remove(uuid)
         del self.latencyAverages[uuid]
@@ -83,22 +98,27 @@ class WinfreyServer( WinfreyEditor ):
         self.endpoint.broadcast( '[' + serialize( uuid, "remove_cursor", uuid ) + ']' )
 
     def create_cursor( self, cid ):
+        """Creates a new cursor object with a given cursor ID. Extends WinfreyEditor.create_cursor"""
         super().create_cursor( cid )
         return {"status": "ok", "other": ""}
 
     def remove_cursor( self, cid ):
+        """Removes the cursor object with the given cursor ID. Extends WinfreyEditor.remove_cursor"""
         super().remove_cursor( cid )
         return {"status": "ok", "other": ""}
 
     def move_cursor( self, cid, direction ):
+        """Moves the cursor with the given CID in the given direction. Extends WinfreyEditor.move_cursor"""
         super().move_cursor( cid, direction )
         return {"status": "ok", "other": ""}
 
     def insert_char( self, cid, char ):
+        """Inserts a character at the cursor with the given CID. Extends WinfreyEditor.insert_char"""
         super().insert_char( cid, char )
         return {"status": "ok", "other": ""}
 
     def echo_response( self, message ):
+        """Action to be taken when the server receives a response from an "echo" message"""
         for m in message: 
             print("ECHO " + m)
         return {"status": "ok", "other": ""}
@@ -107,14 +127,18 @@ class WinfreyServer( WinfreyEditor ):
         return {"status": "fail", "other": "No RPC matches this contract"}
 
     def _handle( self, procedure ):
+        """Callback function for when the server receives a new message."""
         f = procedure["name"]
 
         if f == "subscribe" or f == "unsubscribe":
+            # Subscription message: apply immediately
             reply = self._apply_function( f, *procedure["args"] )
         elif f == "echo_response": 
+            # Response to an echo message: apply immediately
             self.updateBatchDelay(procedure["uuid"], procedure["args"])
             reply = self._apply_function( f, procedure["args"] )
         else:
+            # Delayable message: check for staleness and add to the update queue
             is_too_old = (float(procedure["time"]) < time.time() - self.batchDelay)
             if is_too_old:
                 return {"status": "dropped", "other": "message_too_old"}
@@ -128,6 +152,7 @@ class WinfreyServer( WinfreyEditor ):
         return reply
 
     def _apply_function( self, name, *args ):
+        """Runs an RPC function with the given name and the given arguments."""
         function = self.rpc_funcs.get( name, self.no_such_function )
         return function( *args )
 
@@ -150,6 +175,8 @@ class WinfreyServer( WinfreyEditor ):
             print("NEW BATCH DELAY: " + str(self.batchDelay))
 
     def _bundle_and_broadcast( self ):
+        """Bundles all messages currently in the update queue into a single message and
+           broadcasts it to all clients."""
         while True:
             time.sleep(self.batchDelay)
             ps = []
@@ -180,7 +207,14 @@ class WinfreyServer( WinfreyEditor ):
 
 
 class WinfreyClient( WinfreyEditor ):
+    """A Winfrey file client. Connects to a file host and relays all changes made by the editor to the server
+       and vice versa."""
     def __init__( self, remote_address, broadcast_address ):
+        """Creates a new instance of a WinfreyClient.
+
+        remote_address: Server port to specifically connect to
+        broadcast_address: Server port to passively listen for updates on"""
+
         self.logger = logging.getLogger("main")
         self.endpoint = clientpoint.Client( remote_address, broadcast_address, self.logger )
    
@@ -197,6 +231,7 @@ class WinfreyClient( WinfreyEditor ):
                 "insert_char": self.insert_char
         }
 
+        # Time adjustment thread
         self.offset = 0
         self.stopped = False
         self.time_thread = threading.Thread( target=self.get_time )
@@ -208,6 +243,8 @@ class WinfreyClient( WinfreyEditor ):
         self.G.launch()
 
     def get_time( self ):
+        """Updates the offset between the local clock and the NTP time authority every thirty seconds.
+        Additionally, pings the Winfrey server every thirty seconds to update network latency data"""
         while True:
             try: 
                 response = self.ntpclient.request('0.pool.ntp.org', version=3,
@@ -224,12 +261,15 @@ class WinfreyClient( WinfreyEditor ):
                 time.sleep(3)
 
     def move_my_cursor( self, direction ):
+        """Callback function for when the local cursor is moved in the given direction. Sends this change
+        to the connected server."""
         self.timelock.acquire()
         ltime = time.time() - self.offset
         self.timelock.release()
         reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "move_cursor", "args": [str(self.my_cursor), str(direction)], "time": str(ltime)}) )
 
     def echo( self ):
+        """Sends a bundle of timestamps to the server"""
         i = 0
         message = []
         while i < 5: 
@@ -243,12 +283,16 @@ class WinfreyClient( WinfreyEditor ):
                                                 "args": message} ))
 
     def insert_my_char( self, char ):
+        """Callback function for when a character is inserted at the local cursor. Sends this change to the
+        connected server."""
         self.timelock.acquire()
         ltime = time.time() - self.offset
         self.timelock.release()
         reply = self.endpoint.send( json.dumps({"uuid": str(self.my_cursor), "name": "insert_char", "args": [str(self.my_cursor), str(char)], "time": str(ltime)}) )
 
     def subscribe( self ):
+        """Sends a subscription message to the connected server, then receives and loads the text file from the
+        server's response. Buffers incoming changes during this time."""
         reply = self.endpoint.send( serialize( 0, "subscribe" ), preprocess=self._preprocess_indiv )
         self.endpoint.startBackground( self._handleQueue, preprocess=self._preprocess )
         if reply["status"] == "subscribed":
@@ -270,11 +314,13 @@ class WinfreyClient( WinfreyEditor ):
             return None
 
     def unsubscribe( self ):
+        """Unsubscribes and disconnects from the connected server."""
         reply = self.endpoint.send( serialize( self.my_cursor, "unsubscribe", self.my_cursor ), preprocess=self._preprocess_indiv )
         
         self.endpoint.stop()
 
     def interrupt( self ):
+        """Callback function for when the user asks to close the client."""
         self.unsubscribe()
         self.stopped = True
 
@@ -288,6 +334,7 @@ class WinfreyClient( WinfreyEditor ):
             self._handle(procedures) 
 
     def _handle( self, procedures ):
+        """Callback function for when an update is received from the server."""
         for procedure in procedures:
             if procedure["uuid"] == self.my_cursor and procedure["name"] == "echo":
                 self.echo( procedure["args"] )

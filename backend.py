@@ -98,7 +98,7 @@ class editor_state:
             self.insert_char( cid, '\n' )
 
     def insert_char(self, cid, c):
-    """ inserts one character at a time, at the position of the given cursor """
+        """ inserts one character at a time, at the position of the given cursor """
         row = self.cursors[cid]["cy"]
         col = self.cursors[cid]["cx"]
         r = self.rows[row]
@@ -121,7 +121,7 @@ class editor_state:
             self.move_cursor(cid, 'right')
 
     def remove_char(self, cid):
-    """ removes a character at the position of the given cursor """
+        """ removes a character at the position of the given cursor """
         row = self.cursors[cid]["cy"]
         col = self.cursors[cid]["cx"]
         r = self.rows[row]
@@ -136,7 +136,7 @@ class editor_state:
             self.update_line( row )
 
     def write(self, filename=''):
-    """ saves to disk """
+        """ saves to disk """
         if filename == '':
             filename = self.fname
         try:
